@@ -106,7 +106,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
  * @param {number} depth - Analysis depth
  * @returns {Promise} - Analysis results
  */
-export const getStockfishAnalysis = async (fen, depth = 15) => {
+export const getStockfishAnalysis = async (fen, depth = 30) => {
   try {
     // First try local development server
     try {

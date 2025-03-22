@@ -18,7 +18,7 @@ app.get('/', (req, res) => {
 // Analysis endpoint
 app.post('/', async (req, res) => {
   try {
-    const { fen, depth = 15 } = req.body;
+    const { fen, depth = 30 } = req.body;
     
     if (!fen) {
       return res.status(400).json({ error: 'FEN position is required' });

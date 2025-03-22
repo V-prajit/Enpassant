@@ -13,9 +13,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/app
 
 # Clone and build Stockfish from source
+# Use x86-64 architecture which will work on Google Cloud Run
 RUN git clone https://github.com/official-stockfish/Stockfish.git && \
     cd Stockfish/src && \
-    make -j build ARCH=x86-64-modern && \
+    make -j build ARCH=x86-64 && \
     cp stockfish /usr/local/bin/
 
 # Copy package.json and install dependencies
