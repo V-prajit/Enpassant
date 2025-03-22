@@ -50,8 +50,12 @@ exports.analyzeChessPosition = async (req, res) => {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
 
+    // Correctly extract text from the response
+    const text = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || 
+                'Sorry, I could not analyze this position due to a technical issue.';
+
     return res.status(200).json({
-      explanation: result.response.text(),
+      explanation: text,
     });
   } catch (error) {
     console.error('Error:', error);

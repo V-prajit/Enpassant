@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getAnalysis, testAnalysis } from '../services/api';
 const AnalysisPanel = ({ fen }) => {
   const [evaluationScore, setEvaluationScore] = useState('0.0');

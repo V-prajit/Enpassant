@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "functions-framework --target=analyzeChessPosition",
+    "mock": "functions-framework --target=mockAnalyzePosition --source=mock-function.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "gcloud functions deploy analyzeChessPosition --runtime nodejs18 --trigger-http --allow-unauthenticated",
+    "auth": "gcloud auth login && gcloud auth application-default login"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
     "@google-cloud/vertexai": "^1.9.3"
   }
 }
