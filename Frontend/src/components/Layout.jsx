@@ -57,14 +57,14 @@ const Layout = () => {
   };
 
   return (
-    <div className="app-container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      <h1>Chess Voice Coach</h1>
-      <div className="game-info" style={{ marginBottom: '10px' }}>
-        <span><strong>Current turn:</strong> {turn === 'w' ? 'White' : 'Black'}</span>
+    <div className="max-w-[1200px] mx-auto p-5">
+      <h1 className="text-3xl font-bold mb-4">Chess Voice Coach</h1>
+      <div className="mb-2">
+        <span className="font-bold">Current turn:</span> {turn === 'w' ? 'White' : 'Black'}
       </div>
       
-      <div className="main-content" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
-        <div className="left-panel">
+      <div className="flex flex-wrap gap-5">
+        <div className="flex-1">
           <Chessboard 
             fen={fen} 
             lastMove={lastMove} 
@@ -73,23 +73,23 @@ const Layout = () => {
             getLegalMoves={getLegalMoves}
           />
           
-          <div className="controls" style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <button onClick={() => initGame()}>New Game</button>
-            <button onClick={undoMove}>Undo Move</button>
-            <button onClick={toggleOrientation}>Flip Board</button>
-            <button onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={() => initGame()}>New Game</button>
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={undoMove}>Undo Move</button>
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={toggleOrientation}>Flip Board</button>
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}>
               Load Position
             </button>
-            <button onClick={loadPromotionTest}>
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={loadPromotionTest}>
               Test White Promotion
             </button>
-            <button onClick={loadBlackPromotionTest}>
+            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={loadBlackPromotionTest}>
               Test Black Promotion
             </button>
           </div>
         </div>
         
-        <div className="right-panel" style={{ flex: 1, minWidth: '300px' }}>
+        <div className="flex-1 min-w-[300px]">
           <MoveHistory history={history} onMoveClick={handleMoveClick} />
           <AnalysisPanel fen={fen} onSelectMove={handleSelectMove} />
         </div>

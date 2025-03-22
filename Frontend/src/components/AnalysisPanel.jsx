@@ -1,4 +1,3 @@
-// src/components/AnalysisPanel.jsx
 import React, { useState } from 'react';
 import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
 
@@ -52,31 +51,36 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   };
 
   return (
-    <div className="analysis-panel">
-      <h3>Position Analysis</h3>
+    <div className="bg-white p-5 rounded-md shadow-sm">
+      <h3 className="text-lg font-bold mb-4">Position Analysis</h3>
       
-      <div className="evaluation">
-        <h4>Evaluation</h4>
-        <div>{evaluation}</div>
+      <div className="evaluation mb-4">
+        <h4 className="text-md font-bold mb-2">Evaluation</h4>
+        <div className="text-lg">{evaluation}</div>
       </div>
       
-      <div className="best-moves">
-        <h4>Suggested Moves</h4>
-        <ul>
+      <div className="best-moves mb-4">
+        <h4 className="text-md font-bold mb-2">Suggested Moves</h4>
+        <ul className="list-none p-0">
           {bestMoves.map((move, index) => (
-            <li key={index} onClick={() => onSelectMove && onSelectMove(move)}>
-              {move.uci} {move.san && `(${move.san})`}
+            <li 
+              key={index} 
+              className="py-1 cursor-pointer hover:bg-gray-100"
+              onClick={() => onSelectMove && onSelectMove(move)}
+            >
+              {move.san} ({move.uci})
             </li>
           ))}
         </ul>
       </div>
       
-      <div className="ai-explanation">
-        <h4>AI Coach Explanation</h4>
-        <div className="controls">
+      <div className="ai-explanation mb-4">
+        <h4 className="text-md font-bold mb-2">AI Coach Explanation</h4>
+        <div className="controls flex flex-wrap gap-3 mb-4">
           <select 
             value={playerLevel} 
             onChange={(e) => setPlayerLevel(e.target.value)}
+            className="py-2 px-4 rounded-md border border-gray-200"
           >
             <option value="beginner">Beginner</option>
             <option value="intermediate">Intermediate</option>
@@ -86,6 +90,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           <button 
             onClick={handleAnalyze} 
             disabled={isAnalyzing || !fen}
+            className={`bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Position'}
           </button>
@@ -93,20 +98,15 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           <button 
             onClick={handleGetExplanation} 
             disabled={isLoading || !fen || bestMoves.length === 0}
+            className={`bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isLoading ? 'Loading explanation...' : 'Get AI Explanation'}
           </button>
         </div>
         
-        {error && <div className="error" style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+        {error && <div className="text-red-500 mb-4">{error}</div>}
         
-        <div className="explanation-content" style={{ 
-          marginTop: '15px',
-          padding: '15px',
-          backgroundColor: '#f8f9fa',
-          borderRadius: '5px',
-          whiteSpace: 'pre-line'
-        }}>
+        <div className="explanation-content p-4 bg-gray-100 rounded-md whitespace-pre-line">
           {isLoading ? (
             <p>Getting AI explanation...</p>
           ) : explanation ? (
@@ -115,6 +115,12 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
             <p>First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
           )}
         </div>
+      </div>
+      
+      <div className="voice-controls mb-4">
+        <h4 className="text-md font-bold mb-2">Voice Commands</h4>
+        <p>Voice controls will be implemented in milestone 3</p>
+        <button disabled className="bg-gray-300 text-gray-500 py-2 px-4 rounded-md cursor-not-allowed">Start Listening</button>
       </div>
     </div>
   );

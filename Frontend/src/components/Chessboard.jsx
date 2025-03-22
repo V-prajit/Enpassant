@@ -1,4 +1,3 @@
-// src/components/Chessboard.jsx
 import React, { useState, useCallback } from 'react';
 import { Chessboard as ReactChessboard } from 'react-chessboard';
 
@@ -55,7 +54,7 @@ const Chessboard = ({
   }
 
   return (
-    <div className="chessboard-container" style={{ width: '500px', height: '500px', position: 'relative' }}>
+    <div className="w-[500px] h-[500px] relative rounded-md shadow-md">
       <ReactChessboard
         id="chess-board"
         animationDuration={200}
