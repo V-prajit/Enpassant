@@ -54,7 +54,7 @@ const Chessboard = ({
   }
 
   return (
-    <div className="w-[500px] h-[500px] relative rounded-md shadow-md">
+    <div className="w-full max-w-[400px] mx-auto">
       <ReactChessboard
         id="chess-board"
         animationDuration={200}
@@ -65,11 +65,13 @@ const Chessboard = ({
         boardOrientation={orientation}
         promotionToSquare={promotionSquare}
         onPromotionPieceSelect={onPromotionPieceSelect}
-        boardWidth={500}
+        boardWidth={400}
         customBoardStyle={{
           borderRadius: '4px',
           boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)'
         }}
+        customDarkSquareStyle={{ backgroundColor: '#4b7399' }} // Match screenshot
+        customLightSquareStyle={{ backgroundColor: '#e0e0e0' }} // Match screenshot
       />
     </div>
   );
