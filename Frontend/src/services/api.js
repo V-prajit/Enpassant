@@ -1,9 +1,8 @@
 // Frontend/src/services/api.js
 
+// Cloud Function endpoints
 const GEMINI_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
 const STOCKFISH_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish';
-const LOCAL_GEMINI_URL = 'http://localhost:8080';
-const LOCAL_STOCKFISH_URL = 'http://localhost:8081';
 
 // Mock position explanations for different chess positions
 const positionExplanations = {
@@ -101,69 +100,94 @@ Focus on finding the best moves through calculation and applying chess principle
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Get Stockfish analysis for a chess position
+ * Get Stockfish analysis for a chess position with progressive updates
  * @param {string} fen - FEN string of the position
- * @param {number} depth - Analysis depth
- * @returns {Promise} - Analysis results
+ * @param {number} depth - Target analysis depth
+ * @param {function} onUpdate - Optional callback for receiving progressive updates
+ * @returns {Promise} - Final analysis results
  */
-export const getStockfishAnalysis = async (fen, depth = 30) => {
+export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => {
   try {
-    // First try local development server
-    try {
-      console.log('Trying local Stockfish server...');
-      const localResponse = await fetch(LOCAL_STOCKFISH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': 'http://localhost:5173'
-        },
-        body: JSON.stringify({ fen, depth }),
-      });
-      
-      if (localResponse.ok) {
-        console.log('Successfully connected to local Stockfish server');
-        return await localResponse.json();
-      }
-    } catch (error) {
-      console.log('Local Stockfish server not available:', error.message);
-    }
+    console.log(`Starting analysis with target depth ${depth}...`);
+    const startTime = performance.now();
     
-    // Try production server
-    console.log('Trying production Stockfish server...');
-    const prodResponse = await fetch(STOCKFISH_URL, {
+    // First call to start analysis - returns quickly
+    const response = await fetch(STOCKFISH_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'http://localhost:5173'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ fen, depth }),
     });
     
-    if (!prodResponse.ok) {
-      throw new Error('Failed to get Stockfish analysis');
+    if (!response.ok) {
+      throw new Error(`Stockfish analysis failed: ${response.status} ${response.statusText}`);
     }
     
-    console.log('Successfully connected to production Stockfish server');
-    return await prodResponse.json();
+    // Initial result comes back fast (chess.com style)
+    const initialResult = await response.json();
+    const initialTime = Math.round(performance.now() - startTime);
+    console.log(`Initial analysis in ${initialTime}ms at depth ${initialResult.depth}`);
+    
+    // If caller wants updates, provide the initial result immediately
+    if (onUpdate) {
+      onUpdate(initialResult);
+    }
+    
+    // If we already got a deep enough analysis or if nobody wants updates, we're done
+    if (initialResult.depth >= depth || !onUpdate) {
+      return initialResult;
+    }
+    
+    // Start polling for deeper analysis in the background more frequently - every 50ms
+    return new Promise((resolve) => {
+      let currentDepth = initialResult.depth;
+      let lastResult = initialResult;
+      let maxPolls = 20; // Increase poll limit for more updates
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          // Check for updated analysis with minimum depth requirement
+          const statusUrl = `${STOCKFISH_URL.replace(/\/$/, '')}/status/${encodeURIComponent(fen)}?minDepth=${currentDepth + 1}`;
+          const pollResponse = await fetch(statusUrl);
+          
+          if (pollResponse.ok) {
+            const updatedResult = await pollResponse.json();
+            
+            // Update more frequently - even with small progress
+            if (updatedResult.depth >= currentDepth) {
+              // Always update UI to show progress being made
+              console.log(`Updated analysis at depth ${updatedResult.depth}`);
+              onUpdate(updatedResult);
+              
+              // Only update depth tracking if it actually increased
+              if (updatedResult.depth > currentDepth) {
+                currentDepth = updatedResult.depth;
+                lastResult = updatedResult;
+              }
+              
+              // If we reached target depth or analysis is complete, we're done
+              if (currentDepth >= depth || updatedResult.completed) {
+                clearInterval(pollInterval);
+                resolve(updatedResult);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Poll error:', err);
+        }
+        
+        // Decrease remaining polls
+        maxPolls--;
+        if (maxPolls <= 0) {
+          clearInterval(pollInterval);
+          resolve(lastResult);
+        }
+      }, 50); // Poll much more frequently (50ms instead of 200ms)
+    });
   } catch (error) {
     console.error('Stockfish API error:', error);
-    
-    // Return mock analysis
-    console.log('Using mock Stockfish analysis');
-    
-    // Simulate network delay
-    await delay(500);
-    
-    return {
-      fen,
-      depth,
-      evaluation: '0.00',
-      bestMoves: [
-        { uci: 'e2e4', san: 'e4' },
-        { uci: 'g1f3', san: 'Nf3' },
-        { uci: 'd2d4', san: 'd4' }
-      ]
-    };
+    throw error; // Re-throw to be handled by the caller
   }
 };
 
@@ -177,38 +201,14 @@ export const getStockfishAnalysis = async (fen, depth = 30) => {
  */
 export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   try {
-    // First try local Gemini server
-    try {
-      console.log('Trying local Gemini server...');
-      const localResponse = await fetch(LOCAL_GEMINI_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': 'http://localhost:5173'
-        },
-        body: JSON.stringify({
-          fen,
-          evaluation,
-          bestMoves,
-          playerLevel
-        }),
-      });
-      
-      if (localResponse.ok) {
-        console.log('Successfully connected to local Gemini server');
-        return await localResponse.json();
-      }
-    } catch (error) {
-      console.log('Local Gemini server not available:', error.message);
-    }
+    console.log(`Getting explanation for ${playerLevel} level...`);
+    const startTime = performance.now();
     
-    // Try production Gemini server
-    console.log('Trying production Gemini server...');
-    const prodResponse = await fetch(GEMINI_URL, {
+    // Direct call to cloud function
+    const response = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'http://localhost:5173'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         fen,
@@ -218,21 +218,19 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
       }),
     });
     
-    if (!prodResponse.ok) {
-      throw new Error('Failed to get Gemini explanation');
+    if (!response.ok) {
+      throw new Error(`Gemini explanation failed: ${response.status} ${response.statusText}`);
     }
     
-    console.log('Successfully connected to production Gemini server');
-    return await prodResponse.json();
+    const result = await response.json();
+    const genTime = Math.round(performance.now() - startTime);
+    console.log(`Explanation generated in ${genTime}ms`);
+    
+    return result;
   } catch (error) {
     console.error('Gemini API error:', error);
     
-    // Return mock explanation
-    console.log('Using mock explanation');
-    
-    // Simulate network delay
-    await delay(1000);
-    
+    // Fallback to mock explanation if cloud function fails
     return getMockAnalysis(fen, playerLevel);
   }
 };

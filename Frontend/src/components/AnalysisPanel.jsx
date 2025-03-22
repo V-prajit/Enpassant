@@ -16,7 +16,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   const lastAnalyzedFen = useRef('');
   const analysisTimeoutRef = useRef(null);
   
-  // Handle Stockfish analysis
+  // Handle progressive Stockfish analysis (chess.com style)
   const handleAnalyze = async (analysisDepth = depth) => {
     if (!fen || isAnalyzing) return;
     
@@ -27,19 +27,35 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     setError(null);
     
     try {
-      // Get Stockfish analysis
-      const result = await getStockfishAnalysis(fen, analysisDepth);
-      
-      // Ensure we're still looking at the same position
-      if (lastAnalyzedFen.current === fen) {
-        // Update state with results
-        setEvaluation(result.evaluation);
-        setBestMoves(result.bestMoves);
-      }
+      // Progressive analysis with callback for updates
+      await getStockfishAnalysis(
+        fen, 
+        analysisDepth,
+        // This callback receives progressive updates as analysis deepens
+        (progressResult) => {
+          // Only update if we're still analyzing the same position
+          if (lastAnalyzedFen.current === fen) {
+            console.log(`Progressive update: depth ${progressResult.depth}, eval: ${progressResult.evaluation}`);
+            
+            // Update UI immediately with each depth increase
+            setEvaluation(progressResult.evaluation);
+            
+            // Only update moves if we have them
+            if (progressResult.bestMoves && progressResult.bestMoves.length > 0) {
+              setBestMoves(progressResult.bestMoves);
+            }
+            
+            // Continue showing analyzing state until we get a very deep result
+            // This gives users feedback that analysis is still improving
+            if (progressResult.depth >= 18 || progressResult.completed) {
+              setIsAnalyzing(false);
+            }
+          }
+        }
+      );
     } catch (error) {
       console.error('Stockfish analysis error:', error);
-      setError('Failed to analyze position with Stockfish');
-    } finally {
+      setError('Analysis unavailable. Try again or adjust depth.');
       setIsAnalyzing(false);
     }
   };
@@ -56,10 +72,8 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     // Don't analyze if we've already analyzed this position
     if (lastAnalyzedFen.current === fen) return;
     
-    // Add a small delay to prevent excessive API calls during rapid moves
-    analysisTimeoutRef.current = setTimeout(() => {
-      handleAnalyze();
-    }, 500);
+    // Analyze immediately for maximum speed
+    handleAnalyze();
     
     return () => {
       if (analysisTimeoutRef.current) {
