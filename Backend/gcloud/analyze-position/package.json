@@ -7,6 +7,7 @@
     "mock": "functions-framework --target=mockAnalyzePosition --source=mock-function.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "deploy": "gcloud functions deploy analyzeChessPosition --runtime nodejs18 --trigger-http --allow-unauthenticated",
+    "deploy-stockfish": "gcloud functions deploy analyzeWithStockfish --runtime nodejs18 --trigger-http --allow-unauthenticated --source=function-source --entry-point=analyzeWithStockfish",
     "auth": "gcloud auth login && gcloud auth application-default login"
   },
   "keywords": [],
@@ -15,6 +16,7 @@
   "description": "",
   "dependencies": {
     "@google-cloud/functions-framework": "^3.3.0",
-    "@google-cloud/vertexai": "^1.9.3"
+    "@google-cloud/vertexai": "^1.9.3",
+    "node-fetch": "^2.6.9"
   }
 }

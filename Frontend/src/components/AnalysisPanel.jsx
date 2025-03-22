@@ -1,46 +1,50 @@
 import React, { useState } from 'react';
-import { getAnalysis, testAnalysis } from '../services/api';
+import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
 
 const AnalysisPanel = ({ fen, onSelectMove }) => {
-  const [evaluationScore, setEvaluationScore] = useState('0.0');
+  const [evaluation, setEvaluation] = useState('0.0');
+  const [bestMoves, setBestMoves] = useState([]);
   const [explanation, setExplanation] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [playerLevel, setPlayerLevel] = useState('beginner');
   const [error, setError] = useState(null);
-  const [bestMoves, setBestMoves] = useState([
-    { san: 'e4', uci: 'e2e4' },
-    { san: 'Nf3', uci: 'g1f3' },
-    { san: 'd4', uci: 'd2d4' }
-  ]);
   
+  // Handle Stockfish analysis
   const handleAnalyze = async () => {
-    if (!fen) return;
+    if (!fen || isAnalyzing) return;
     
-    setIsLoading(true);
+    setIsAnalyzing(true);
     setError(null);
     
     try {
-      const result = await getAnalysis(fen, evaluationScore, bestMoves, playerLevel);
-      setExplanation(result.explanation);
+      // Get Stockfish analysis
+      const result = await getStockfishAnalysis(fen, 15);
+      
+      // Update state with results
+      setEvaluation(result.evaluation);
+      setBestMoves(result.bestMoves);
     } catch (error) {
-      console.error('Analysis error:', error);
-      setError('Failed to analyze position. Please try again.');
+      console.error('Stockfish analysis error:', error);
+      setError('Failed to analyze position with Stockfish');
     } finally {
-      setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
-
-  const handleTestAnalyze = async () => {
-    if (!fen) return;
+  
+  // Handle Gemini explanation
+  const handleGetExplanation = async () => {
+    if (!fen || isLoading) return;
     
     setIsLoading(true);
-    setError(null);
     
     try {
-      const result = await testAnalysis(fen, playerLevel);
+      // Get AI explanation
+      const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
       setExplanation(result.explanation);
     } catch (error) {
-      setError('Test analysis failed');
+      console.error('Gemini explanation error:', error);
+      setError('Failed to get AI explanation');
     } finally {
       setIsLoading(false);
     }
@@ -52,14 +56,18 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
       
       <div className="evaluation mb-4">
         <h4 className="text-md font-bold mb-2">Evaluation</h4>
-        <div className="text-lg">{evaluationScore}</div>
+        <div className="text-lg">{evaluation}</div>
       </div>
       
       <div className="best-moves mb-4">
         <h4 className="text-md font-bold mb-2">Suggested Moves</h4>
         <ul className="list-none p-0">
           {bestMoves.map((move, index) => (
-            <li key={index} className="py-1">
+            <li 
+              key={index} 
+              className="py-1 cursor-pointer hover:bg-gray-100"
+              onClick={() => onSelectMove && onSelectMove(move)}
+            >
               {move.san} ({move.uci})
             </li>
           ))}
@@ -81,18 +89,18 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           
           <button 
             onClick={handleAnalyze} 
-            disabled={isLoading || !fen}
-            className={`bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isAnalyzing || !fen}
+            className={`bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isLoading ? 'Analyzing...' : 'Get Analysis'}
+            {isAnalyzing ? 'Analyzing...' : 'Analyze Position'}
           </button>
           
           <button 
-            onClick={handleTestAnalyze} 
-            disabled={isLoading || !fen}
+            onClick={handleGetExplanation} 
+            disabled={isLoading || !fen || bestMoves.length === 0}
             className={`bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            Test Analysis
+            {isLoading ? 'Loading explanation...' : 'Get AI Explanation'}
           </button>
         </div>
         
@@ -100,11 +108,11 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         
         <div className="explanation-content p-4 bg-gray-100 rounded-md whitespace-pre-line">
           {isLoading ? (
-            <p>Analyzing position...</p>
+            <p>Getting AI explanation...</p>
           ) : explanation ? (
             <p>{explanation}</p>
           ) : (
-            <p>Click "Get Analysis" to analyze this position.</p>
+            <p>First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
           )}
         </div>
       </div>

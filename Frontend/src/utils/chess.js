@@ -79,7 +79,7 @@ export const uciToSan = (uciMove, chess) => {
   };
   
   // This will be implemented in Milestone 2 - Stockfish Integration
-  export const analyzePosition = (stockfish, fen, depth = 15) => {
+  export const analyzePosition = (stockfish, fen, depth = 30) => {
     console.log('Position analysis will be implemented here in Milestone 2');
     // Will return a promise that resolves with analysis results
     return Promise.resolve({

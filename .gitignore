@@ -3,3 +3,4 @@ Frontend/CLAUDE.md
 /Frontend/node_modules
 Frontend/src/.DS_Store
 /Backend/gcloud/analyze-position/node_modules
+/Backend/gcloud/stockfish-analysis/node_modules
