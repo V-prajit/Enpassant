@@ -1,0 +1,1 @@
+https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition
