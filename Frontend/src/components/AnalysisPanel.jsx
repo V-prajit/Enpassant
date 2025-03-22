@@ -1,18 +1,20 @@
+// Frontend/src/components/AnalysisPanel.jsx
 import React, { useState } from 'react';
 import { getAnalysis, testAnalysis } from '../services/api';
+
 const AnalysisPanel = ({ fen }) => {
   const [evaluationScore, setEvaluationScore] = useState('0.0');
   const [explanation, setExplanation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [playerLevel, setPlayerLevel] = useState('beginner');
   const [error, setError] = useState(null);
-  const bestMoves = [
+  const [bestMoves, setBestMoves] = useState([
     { san: 'e4', uci: 'e2e4' },
     { san: 'Nf3', uci: 'g1f3' },
     { san: 'd4', uci: 'd2d4' }
-  ];
+  ]);
   
-  const handleAnalyze = async () =>{
+  const handleAnalyze = async () => {
     if (!fen) return;
     
     setIsLoading(true);
@@ -23,7 +25,7 @@ const AnalysisPanel = ({ fen }) => {
       setExplanation(result.explanation);
     } catch (error) {
       console.error('Analysis error:', error);
-      setError('Failed to analyze position. Try the test endpoint instead.');
+      setError('Failed to analyze position. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -36,7 +38,7 @@ const AnalysisPanel = ({ fen }) => {
     setError(null);
     
     try {
-      const result = await testAnalysis(fen);
+      const result = await testAnalysis(fen, playerLevel);
       setExplanation(result.explanation);
     } catch (error) {
       setError('Test analysis failed');
@@ -44,7 +46,6 @@ const AnalysisPanel = ({ fen }) => {
       setIsLoading(false);
     }
   };
-
 
   return (
     <div className="analysis-panel">
@@ -67,7 +68,7 @@ const AnalysisPanel = ({ fen }) => {
       </div>
       
       <div className="ai-explanation">
-        <h4>AI Explanation</h4>
+        <h4>AI Coach Explanation</h4>
         <div className="controls">
           <select 
             value={playerLevel} 
@@ -89,13 +90,19 @@ const AnalysisPanel = ({ fen }) => {
             onClick={handleTestAnalyze} 
             disabled={isLoading || !fen}
           >
-            Test API
+            Test Analysis
           </button>
         </div>
         
-        {error && <div className="error">{error}</div>}
+        {error && <div className="error" style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
         
-        <div className="explanation-content">
+        <div className="explanation-content" style={{ 
+          marginTop: '15px',
+          padding: '15px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '5px',
+          whiteSpace: 'pre-line'
+        }}>
           {isLoading ? (
             <p>Analyzing position...</p>
           ) : explanation ? (
