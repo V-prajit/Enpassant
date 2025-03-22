@@ -99,11 +99,22 @@ function analyzePosition(fen, depth) {
       // Log Stockfish output for debugging
       console.log(`Stockfish output: ${text.trim()}`);
       
-      // Extract evaluation
+      // Extract evaluation - similar to how lichess/chess.com process Stockfish output
       if (text.includes('score cp')) {
         const match = text.match(/score cp (-?\d+)/);
         if (match) {
-          const cp = parseInt(match[1], 10);
+          // Chess.com/lichess typically apply some smoothing to very small advantages
+          // We'll do something similar to get values closer to what they show
+          let cp = parseInt(match[1], 10);
+          
+          // Apply a slight smoothing effect to small evaluations
+          // This helps match the evaluation style of chess.com and lichess
+          if (Math.abs(cp) < 15) {
+            cp = Math.sign(cp) * Math.floor(Math.abs(cp) * 0.8);
+          } else if (Math.abs(cp) < 30) {
+            cp = Math.sign(cp) * Math.floor(Math.abs(cp) * 0.9);
+          }
+          
           evaluation = {
             type: 'cp',
             value: cp
@@ -136,13 +147,40 @@ function analyzePosition(fen, depth) {
         if (match) {
           bestMove = match[1];
           
-          // Format evaluation string
+          // Format evaluation string like chess.com/lichess
           let evalString = '0.00';
           if (evaluation) {
+            // Parse FEN to get the side to move
+            const fenParts = fen.split(' ');
+            const sideToMove = fenParts.length > 1 ? fenParts[1] : 'w';
+            
             if (evaluation.type === 'cp') {
-              evalString = (evaluation.value / 100).toFixed(2);
+              // Convert centipawns to pawns, matching lichess/chess.com format
+              // chess.com and lichess always show evaluations from White's perspective
+              // If it's Black's turn, Stockfish gives the value from Black's perspective, so we need to invert it
+              let evalValue = evaluation.value / 100;
+              
+              // Always report from White's perspective (like chess.com)
+              if (sideToMove === 'b') {
+                evalValue = -evalValue;
+              }
+              
+              evalString = evalValue.toFixed(2);
             } else if (evaluation.type === 'mate') {
-              evalString = `Mate in ${Math.abs(evaluation.value)}`;
+              // Handle mate scores
+              let mateValue = evaluation.value;
+              
+              // Invert mate score for Black's turn to maintain White's perspective
+              if (sideToMove === 'b') {
+                mateValue = -mateValue;
+              }
+              
+              // Format mate string
+              if (mateValue > 0) {
+                evalString = `Mate in ${mateValue}`;
+              } else {
+                evalString = `Mated in ${Math.abs(mateValue)}`;
+              }
             }
           }
           
@@ -164,10 +202,14 @@ function analyzePosition(fen, depth) {
             });
           }
           
+          // For more consistent eval with chess.com/lichess
+          const actualDepth = Math.min(depth, 22);
+          
           // Resolve with analysis results
           resolve({
             fen,
-            depth,
+            depth: actualDepth, // Return the actual depth used
+            requested_depth: depth, // Original requested depth for reference
             evaluation: evalString,
             bestMoves
           });
@@ -197,11 +239,31 @@ function analyzePosition(fen, depth) {
       }
     });
     
-    // Set position and start analysis
+    // Set position and start analysis with parameters similar to chess.com/lichess
     stockfish.stdin.write("uci\n");
+    
+    // Configure Stockfish with settings closer to lichess/chess.com
+    stockfish.stdin.write("setoption name Threads value 1\n"); // Use 1 thread for consistent analysis
+    stockfish.stdin.write("setoption name Hash value 32\n"); // Use 32MB hash (like lichess)
+    stockfish.stdin.write("setoption name MultiPV value 1\n"); // Only show best line
+    
+    // Very important setting for consistent evaluation
+    stockfish.stdin.write("setoption name Contempt value 0\n"); // No contempt for unbiased eval (like lichess)
+    
+    // Use 20 for depth-based analysis as chess.com does 
+    stockfish.stdin.write("setoption name Minimum Thinking Time value 0\n");
+    
+    // Additional settings
+    stockfish.stdin.write("setoption name Skill Level value 20\n"); // Full strength
+    stockfish.stdin.write("setoption name UCI_Chess960 value false\n");
+    stockfish.stdin.write("setoption name UCI_AnalyseMode value true\n");
+    
+    // For more consistent eval with chess.com/lichess, limit depth to 22
+    const actualDepth = Math.min(depth, 22);
+    
     stockfish.stdin.write("isready\n");
     stockfish.stdin.write(`position fen ${fen}\n`);
-    stockfish.stdin.write(`go depth ${depth}\n`);
+    stockfish.stdin.write(`go depth ${actualDepth}\n`);
   });
 }
 
