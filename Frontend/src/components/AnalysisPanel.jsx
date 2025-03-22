@@ -10,7 +10,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   const [playerLevel, setPlayerLevel] = useState('beginner');
   const [error, setError] = useState(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
-  const [depth, setDepth] = useState(15);
+  const [depth, setDepth] = useState(22);
   
   // Use refs to track the latest state for use in effect dependencies
   const lastAnalyzedFen = useRef('');
@@ -120,14 +120,25 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           )}
         </div>
         
-        {/* Visual evaluation bar */}
+        {/* Visual evaluation bar (black and white like chess.com) */}
         {!evaluation.includes('Mate') && (
-          <div className="mt-2 h-4 w-full bg-gray-200 rounded overflow-hidden">
+          <div className="mt-2 h-4 w-full bg-gray-200 rounded overflow-hidden flex">
             <div 
-              className={`h-full ${parseFloat(evaluation) >= 0 ? 'bg-green-600' : 'bg-red-600'}`} 
+              className="h-full bg-black" 
               style={{ 
-                width: `${Math.min(Math.abs(parseFloat(evaluation)) * 10, 50) + 50}%`,
-                marginLeft: parseFloat(evaluation) >= 0 ? '50%' : `${50 - Math.min(Math.abs(parseFloat(evaluation)) * 10, 50)}%`
+                width: `${50 - Math.min(Math.abs(parseFloat(evaluation)) * 8, 50)}%`
+              }}
+            ></div>
+            <div 
+              className="h-full bg-white border-l border-r border-gray-400" 
+              style={{ 
+                width: '0.5%'
+              }}
+            ></div>
+            <div 
+              className="h-full bg-white" 
+              style={{ 
+                width: `${Math.min(Math.abs(parseFloat(evaluation)) * 8, 50) + 49.5}%`,
               }}
             ></div>
           </div>
@@ -207,10 +218,11 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
               onChange={(e) => setDepth(Number(e.target.value))}
               className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
             >
-              <option value="10">10 (Fast)</option>
-              <option value="15">15 (Balanced)</option>
-              <option value="20">20 (Deep)</option>
-              <option value="22">22 (Max)</option>
+              <option value="12">12 (Fast)</option>
+              <option value="18">18 (Balanced)</option>
+              <option value="22">22 (Strong)</option>
+              <option value="26">26 (Deeper)</option>
+              <option value="32">32 (Maximum)</option>
             </select>
           </div>
           

@@ -85,11 +85,11 @@ function analyzePosition(fen, depth) {
     let evaluation = null;
     let pvLine = [];
     
-    // Timeout for analysis (30 seconds)
+    // Extended timeout for deeper analysis (60 seconds)
     const timeout = setTimeout(() => {
       stockfish.kill();
-      reject(new Error('Analysis timed out after 30 seconds'));
-    }, 30000);
+      reject(new Error('Analysis timed out after 60 seconds'));
+    }, 60000);
     
     // Process Stockfish output
     stockfish.stdout.on('data', (data) => {
@@ -202,8 +202,8 @@ function analyzePosition(fen, depth) {
             });
           }
           
-          // For more consistent eval with chess.com/lichess
-          const actualDepth = Math.min(depth, 22);
+          // Support higher depth analysis
+          const actualDepth = Math.min(depth, 32);
           
           // Resolve with analysis results
           resolve({
@@ -242,24 +242,29 @@ function analyzePosition(fen, depth) {
     // Set position and start analysis with parameters similar to chess.com/lichess
     stockfish.stdin.write("uci\n");
     
-    // Configure Stockfish with settings closer to lichess/chess.com
-    stockfish.stdin.write("setoption name Threads value 1\n"); // Use 1 thread for consistent analysis
-    stockfish.stdin.write("setoption name Hash value 32\n"); // Use 32MB hash (like lichess)
+    // Configure Stockfish with optimized settings for cloud analysis
+    stockfish.stdin.write("setoption name Threads value 4\n"); // Use 4 threads for faster analysis
+    stockfish.stdin.write("setoption name Hash value 256\n"); // Use 256MB hash for deeper search
     stockfish.stdin.write("setoption name MultiPV value 1\n"); // Only show best line
     
-    // Very important setting for consistent evaluation
-    stockfish.stdin.write("setoption name Contempt value 0\n"); // No contempt for unbiased eval (like lichess)
+    // Keep evaluation perspective consistent with chess.com/lichess
+    stockfish.stdin.write("setoption name Contempt value 0\n"); // No contempt for unbiased eval
     
-    // Use 20 for depth-based analysis as chess.com does 
+    // Optimized analysis settings
     stockfish.stdin.write("setoption name Minimum Thinking Time value 0\n");
+    stockfish.stdin.write("setoption name Move Overhead value 10\n"); // Small overhead for cloud environment
+    stockfish.stdin.write("setoption name Slow Mover value 100\n"); // Standard timing
     
-    // Additional settings
+    // Maximum strength settings
     stockfish.stdin.write("setoption name Skill Level value 20\n"); // Full strength
     stockfish.stdin.write("setoption name UCI_Chess960 value false\n");
     stockfish.stdin.write("setoption name UCI_AnalyseMode value true\n");
     
-    // For more consistent eval with chess.com/lichess, limit depth to 22
-    const actualDepth = Math.min(depth, 22);
+    // Additional performance optimizations
+    stockfish.stdin.write("setoption name Ponder value false\n");
+    
+    // Support higher depth analysis up to 32 while maintaining compatibility
+    const actualDepth = Math.min(depth, 32);
     
     stockfish.stdin.write("isready\n");
     stockfish.stdin.write(`position fen ${fen}\n`);
