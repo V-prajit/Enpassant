@@ -1,0 +1,56 @@
+/* Board theme using CSS to create a checkered pattern instead of an image */
+cg-board {
+    background-color: #b58863; /* dark squares */
+    background-image: linear-gradient(45deg, #f0d9b5 25%, transparent 25%),
+                      linear-gradient(-45deg, #f0d9b5 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #f0d9b5 75%),
+                      linear-gradient(-45deg, transparent 75%, #f0d9b5 75%);
+    background-size: 25% 25%;
+  }
+  
+  /* Alternative simple checkered pattern */
+  cg-board square.white {
+    background-color: #f0d9b5; /* light squares */
+  }
+  
+  cg-board square.black {
+    background-color: #b58863; /* dark squares */
+  }
+  
+  /* Piece theme - using Lichess assets */
+  .cg-wrap piece.pawn.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wP.svg');
+  }
+  .cg-wrap piece.bishop.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wB.svg');
+  }
+  .cg-wrap piece.knight.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wN.svg');
+  }
+  .cg-wrap piece.rook.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wR.svg');
+  }
+  .cg-wrap piece.queen.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wQ.svg');
+  }
+  .cg-wrap piece.king.white {
+    background-image: url('https://lichess1.org/assets/piece/merida/wK.svg');
+  }
+  .cg-wrap piece.pawn.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bP.svg');
+  }
+  .cg-wrap piece.bishop.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bB.svg');
+  }
+  .cg-wrap piece.knight.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bN.svg');
+  }
+  .cg-wrap piece.rook.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bR.svg');
+  }
+  .cg-wrap piece.queen.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bQ.svg');
+  }
+  .cg-wrap piece.king.black {
+    background-image: url('https://lichess1.org/assets/piece/merida/bK.svg');
+  }

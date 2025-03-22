@@ -1,0 +1,78 @@
+/* Direct CSS for chess board */
+.cg-wrap {
+    box-sizing: content-box;
+    position: relative;
+    display: block;
+  }
+  
+  /* Square colors */
+  cg-board {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    user-select: none;
+    line-height: 0;
+    background: #b58863;
+  }
+  
+  /* Create alternating squares */
+  cg-board::before, cg-board::after {
+    content: '';
+    position: absolute;
+  }
+  
+  /* Individual squares */
+  cg-board square {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12.5%;
+    height: 12.5%;
+    pointer-events: none;
+  }
+  
+  /* Light squares */
+  cg-board square.light {
+    background: #f0d9b5;
+  }
+  
+  /* Dark squares */
+  cg-board square.dark {
+    background: #b58863;
+  }
+  
+  /* Last move highlight */
+  cg-board square.last-move {
+    background-color: rgba(155, 199, 0, 0.41);
+  }
+  
+  /* Selected square */
+  cg-board square.selected {
+    background-color: rgba(20, 85, 30, 0.5);
+  }
+  
+  /* Check highlight */
+  cg-board square.check {
+    background: radial-gradient(
+      ellipse at center,
+      rgba(255, 0, 0, 1) 0%,
+      rgba(231, 0, 0, 1) 25%,
+      rgba(169, 0, 0, 0) 89%,
+      rgba(158, 0, 0, 0) 100%
+    );
+  }
+  
+  /* Piece styling */
+  .cg-wrap piece {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12.5%;
+    height: 12.5%;
+    background-size: cover;
+    z-index: 2;
+    will-change: transform;
+    pointer-events: none;
+  }
