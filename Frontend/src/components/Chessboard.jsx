@@ -184,7 +184,7 @@ if (legalMoves.length > 0) {
     const targetPiece = getPieceAtSquare(move.to);
     customSquareStyles[move.to] = {
       background: targetPiece && targetPiece !== '.'
-        ? `radial-gradient(circle at center, transparent 0%, transparent 60%, ${captureColor} 35%, ${captureColor} 85%, transparent 90%)`
+        ? `radial-gradient(circle at center, transparent 60%, transparent 60%, ${captureColor} 85%, ${captureColor} 85%, transparent 90%)`
         : `radial-gradient(circle, ${dotColor} 0%, ${dotColor} 20%, transparent 25%)`,
       cursor: 'pointer'
     };
