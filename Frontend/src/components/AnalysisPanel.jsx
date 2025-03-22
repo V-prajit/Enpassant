@@ -27,11 +27,6 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     setError(null);
     
     try {
-<<<<<<< Updated upstream
-      const result = await getStockfishAnalysis(fen, 15);
-      setEvaluation(result.evaluation);
-      setBestMoves(result.bestMoves);
-=======
       // Get Stockfish analysis
       const result = await getStockfishAnalysis(fen, analysisDepth);
       
@@ -41,7 +36,6 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         setEvaluation(result.evaluation);
         setBestMoves(result.bestMoves);
       }
->>>>>>> Stashed changes
     } catch (error) {
       console.error('Stockfish analysis error:', error);
       setError('Failed to analyze position with Stockfish');
@@ -96,38 +90,8 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
       
-<<<<<<< Updated upstream
       <div className="evaluation mb-6">
         <h4 className="text-md font-medium text-gray-700 mb-2">Evaluation</h4>
-        <div className="text-lg font-semibold text-gray-800 bg-gray-50 py-2 px-4 rounded-md shadow-sm">
-          {evaluation}
-        </div>
-      </div>
-      
-      <div className="best-moves mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
-        {bestMoves.length === 0 ? (
-          <p className="text-gray-600 italic">No moves available. Click "Analyze Position" to get suggestions.</p>
-        ) : (
-          <ul className="list-none p-0 space-y-2">
-            {bestMoves.map((move, index) => (
-              <li 
-                key={index} 
-                className="py-2 px-4 bg-gray-50 rounded-md shadow-sm text-gray-800 hover:bg-gray-100 transition-colors duration-200 cursor-pointer"
-                onClick={() => onSelectMove && onSelectMove(move)}
-              >
-                {move.san} <span className="text-gray-600">({move.uci})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      
-      <div className="ai-explanation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
-=======
-      <div className="evaluation mb-4">
-        <h4 className="text-md font-bold mb-2">Evaluation</h4>
         <div className="eval-display flex items-center">
           <div className={`text-lg font-bold ${
             evaluation.includes('Mate') 
@@ -170,17 +134,17 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         )}
       </div>
       
-      <div className="best-moves mb-4">
-        <h4 className="text-md font-bold mb-2">Suggested Moves</h4>
+      <div className="best-moves mb-6">
+        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
         {bestMoves.length > 0 ? (
-          <ul className="list-none p-0 border rounded divide-y">
+          <ul className="list-none p-0 border rounded-md divide-y shadow-sm">
             {bestMoves.map((move, index) => (
               <li 
                 key={index} 
                 className="py-2 px-3 cursor-pointer hover:bg-gray-100 flex items-center"
                 onClick={() => onSelectMove && onSelectMove(move)}
               >
-                <div className="move-number mr-3 bg-green-100 text-green-800 px-2 py-1 rounded font-medium text-sm">
+                <div className="move-number mr-3 bg-green-100 text-green-800 px-2 py-1 rounded-md font-medium text-sm">
                   {index + 1}
                 </div>
                 <div className="flex-1">
@@ -189,7 +153,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
                 </div>
                 <div className="ml-auto">
                   <button 
-                    className="text-sm bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded"
+                    className="text-sm bg-gray-800 hover:bg-gray-900 text-white px-2 py-1 rounded shadow-sm transition-all duration-200"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectMove && onSelectMove(move);
@@ -202,17 +166,17 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
             ))}
           </ul>
         ) : isAnalyzing ? (
-          <div className="p-4 bg-gray-50 text-center rounded">
-            <div className="animate-spin h-6 w-6 border-2 border-green-500 rounded-full border-t-transparent mx-auto mb-2"></div>
+          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+            <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
             <p className="text-gray-600">Analyzing position...</p>
           </div>
         ) : (
-          <div className="p-4 bg-gray-50 text-center rounded">
-            <p className="text-gray-600">No suggested moves available</p>
+          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+            <p className="text-gray-600 italic">No suggested moves available</p>
             {!autoAnalyze && (
               <button
                 onClick={() => handleAnalyze(depth)}
-                className="mt-2 text-sm bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
               >
                 Analyze Now
               </button>
@@ -221,27 +185,27 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         )}
       </div>
       
-      <div className="analysis-settings mb-4">
-        <h4 className="text-md font-bold mb-2">Analysis Settings</h4>
-        <div className="controls flex flex-wrap gap-3 mb-4">
+      <div className="analysis-settings mb-6">
+        <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
+        <div className="flex flex-wrap gap-3 bg-gray-50 p-3 rounded-md shadow-sm">
           <div className="flex items-center">
             <input
               type="checkbox"
               id="autoAnalyze"
               checked={autoAnalyze}
               onChange={() => setAutoAnalyze(!autoAnalyze)}
-              className="mr-2"
+              className="mr-2 h-4 w-4"
             />
-            <label htmlFor="autoAnalyze">Auto-analyze positions</label>
+            <label htmlFor="autoAnalyze" className="text-gray-800">Auto-analyze positions</label>
           </div>
           
           <div className="flex items-center ml-4">
-            <label htmlFor="depth" className="mr-2">Depth:</label>
+            <label htmlFor="depth" className="mr-2 text-gray-800">Depth:</label>
             <select
               id="depth"
               value={depth}
               onChange={(e) => setDepth(Number(e.target.value))}
-              className="py-1 px-2 rounded-md border border-gray-200"
+              className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
             >
               <option value="10">10 (Fast)</option>
               <option value="15">15 (Balanced)</option>
@@ -254,7 +218,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
             <button 
               onClick={() => handleAnalyze(depth)} 
               disabled={isAnalyzing || !fen}
-              className={`bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded-md ${isAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`text-sm py-1 px-3 rounded-md shadow-sm transition-all duration-200 ${isAnalyzing || !fen ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 text-white'}`}
             >
               {isAnalyzing ? 'Analyzing...' : 'Analyze Now'}
             </button>
@@ -262,9 +226,8 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         </div>
       </div>
 
-      <div className="ai-explanation mb-4">
-        <h4 className="text-md font-bold mb-2">AI Coach Explanation</h4>
->>>>>>> Stashed changes
+      <div className="ai-explanation mb-6">
+        <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
         <div className="controls flex flex-wrap gap-3 mb-4">
           <select 
             value={playerLevel} 
@@ -277,18 +240,6 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           </select>
           
           <button 
-<<<<<<< Updated upstream
-            onClick={handleAnalyze} 
-            disabled={isAnalyzing || !fen}
-            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
-              ${isAnalyzing || !fen ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
-          >
-            {isAnalyzing ? 'Analyzing...' : 'Analyze Position'}
-          </button>
-          
-          <button 
-=======
->>>>>>> Stashed changes
             onClick={handleGetExplanation} 
             disabled={isLoading || !fen || bestMoves.length === 0}
             className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
