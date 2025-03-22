@@ -1,0 +1,91 @@
+/* Add this to Frontend/src/App.css or create a new file named AnalysisPanel.css */
+
+.analysis-panel {
+    background-color: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+  }
+  
+  .analysis-panel h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+  }
+  
+  .evaluation {
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 15px;
+  }
+  
+  .best-moves ul {
+    list-style-type: none;
+    padding-left: 0;
+    margin-bottom: 20px;
+  }
+  
+  .best-moves li {
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    background-color: #f0f7ff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .best-moves li:hover {
+    background-color: #d0e8ff;
+  }
+  
+  .ai-explanation .controls {
+    margin-bottom: 15px;
+  }
+  
+  .settings-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  
+  .setting-select {
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-left: 8px;
+  }
+  
+  .button-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  
+  .analyze-button, .explain-button {
+    flex: 1;
+    min-width: 140px;
+  }
+  
+  .explanation-content {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    padding: 15px;
+    line-height: 1.5;
+    white-space: pre-line;
+    border-left: 4px solid #4CAF50;
+  }
+  
+  @media (max-width: 768px) {
+    .settings-row {
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .button-row {
+      flex-direction: column;
+      gap: 8px;
+    }
+  }

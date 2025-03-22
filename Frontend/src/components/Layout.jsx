@@ -1,7 +1,9 @@
+// Frontend/src/components/Layout.jsx (updated)
 import React, { useState } from 'react';
 import Chessboard from './Chessboard';
 import MoveHistory from './MoveHistory';
 import AnalysisPanel from './AnalysisPanel';
+import VoiceControl from './VoiceControl';
 import useChessGame from '../hooks/useChessGame';
 
 const Layout = () => {
@@ -36,14 +38,27 @@ const Layout = () => {
   const toggleOrientation = () => {
     setBoardOrientation(prev => prev === 'white' ? 'black' : 'white');
   };
+  
+  // Handle voice commands
+  const handleVoiceMoveCommand = (moveNotation) => {
+    console.log(`Processing voice move: ${moveNotation}`);
+    try {
+      playMove(moveNotation);
+    } catch (error) {
+      console.error('Invalid voice move:', error);
+    }
+  };
+  
+  const handleVoiceAnalyzeCommand = () => {
+    console.log('Voice command: Analyze position');
+    // This would trigger the analysis in the AnalysisPanel
+    document.querySelector('.analyze-button')?.click();
+  };
 
-  // Setup test positions with better test cases
+  // Setup test positions
   const loadPromotionTest = () => {
     // White pawn about to promote - white to move
     console.log("Loading white promotion test position");
-    // Position with a white pawn on the 7th rank ready to promote
-    // Using a simpler position with just the pawn and kings
-    // Standard pawn promotion position
     initGame('7k/1P6/8/8/8/8/8/K7 w - - 0 1');
     console.log("White pawn on b7 can be promoted by moving to b8");
   };
@@ -51,20 +66,19 @@ const Layout = () => {
   const loadBlackPromotionTest = () => {
     // Black pawn about to promote - black to move
     console.log("Loading black promotion test position");
-    // A simpler position with black pawn and kings - make sure there's space for promotion
     initGame('k7/8/8/8/8/8/1p6/K7 b - - 0 1');
     console.log("Black pawn on b2 can be promoted by moving to b1");
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto p-5">
-      <h1 className="text-3xl font-bold mb-4">Chess Voice Coach</h1>
-      <div className="mb-2">
-        <span className="font-bold">Current turn:</span> {turn === 'w' ? 'White' : 'Black'}
+    <div className="app-container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+      <h1>Chess Voice Coach</h1>
+      <div className="game-info" style={{ marginBottom: '10px' }}>
+        <span><strong>Current turn:</strong> {turn === 'w' ? 'White' : 'Black'}</span>
       </div>
       
-      <div className="flex flex-wrap gap-5">
-        <div className="flex-1">
+      <div className="main-content" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+        <div className="left-panel">
           <Chessboard 
             fen={fen} 
             lastMove={lastMove} 
@@ -73,23 +87,28 @@ const Layout = () => {
             getLegalMoves={getLegalMoves}
           />
           
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={() => initGame()}>New Game</button>
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={undoMove}>Undo Move</button>
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={toggleOrientation}>Flip Board</button>
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}>
+          <div className="controls" style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button onClick={() => initGame()}>New Game</button>
+            <button onClick={undoMove}>Undo Move</button>
+            <button onClick={toggleOrientation}>Flip Board</button>
+            <button onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}>
               Load Position
             </button>
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={loadPromotionTest}>
+            <button onClick={loadPromotionTest}>
               Test White Promotion
             </button>
-            <button className="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded" onClick={loadBlackPromotionTest}>
+            <button onClick={loadBlackPromotionTest}>
               Test Black Promotion
             </button>
           </div>
+          
+          <VoiceControl 
+            onMoveCommand={handleVoiceMoveCommand}
+            onAnalyzeCommand={handleVoiceAnalyzeCommand}
+          />
         </div>
         
-        <div className="flex-1 min-w-[300px]">
+        <div className="right-panel" style={{ flex: 1, minWidth: '300px' }}>
           <MoveHistory history={history} onMoveClick={handleMoveClick} />
           <AnalysisPanel fen={fen} onSelectMove={handleSelectMove} />
         </div>
