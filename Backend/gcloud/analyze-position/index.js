@@ -1,4 +1,7 @@
+// Backend/gcloud/analyze-position/index.js
 const { VertexAI } = require('@google-cloud/vertexai');
+const { createSkillLevelPrompt } = require('./player-levels');
+const { createPositionDescription } = require('./position-analyzer');
 
 exports.analyzeChessPosition = async (req, res) => {
   // Set CORS headers
@@ -26,7 +29,7 @@ exports.analyzeChessPosition = async (req, res) => {
       }
     });
 
-    const { fen, evaluation, bestMoves, playerLevel } = req.body || {};
+    const { fen, evaluation, bestMoves, playerLevel = 'beginner', analysisType = 'general' } = req.body || {};
     
     if (!fen) {
       return res.status(400).json({ error: 'FEN position is required' });
