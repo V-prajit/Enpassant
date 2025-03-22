@@ -1,7 +1,9 @@
 // Frontend/src/services/api.js
 
-const PRODUCTION_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
-const LOCAL_URL = 'http://localhost:8080';
+const GEMINI_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
+const STOCKFISH_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish';
+const LOCAL_GEMINI_URL = 'http://localhost:8080';
+const LOCAL_STOCKFISH_URL = 'http://localhost:8081';
 
 // Mock position explanations for different chess positions
 const positionExplanations = {
@@ -99,85 +101,166 @@ Focus on finding the best moves through calculation and applying chess principle
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Try to connect to backends with fallback to mock service
- * @param {Object} data - Request data
- * @returns {Promise} - Promise resolving to response
+ * Get Stockfish analysis for a chess position
+ * @param {string} fen - FEN string of the position
+ * @param {number} depth - Analysis depth
+ * @returns {Promise} - Analysis results
  */
-async function fetchWithFallback(data) {
-  // First try local backend
+export const getStockfishAnalysis = async (fen, depth = 15) => {
   try {
-    console.log('Trying local backend...');
-    const localResponse = await fetch(LOCAL_URL, {
+    // First try local development server
+    try {
+      console.log('Trying local Stockfish server...');
+      const localResponse = await fetch(LOCAL_STOCKFISH_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'http://localhost:5173'
+        },
+        body: JSON.stringify({ fen, depth }),
+      });
+      
+      if (localResponse.ok) {
+        console.log('Successfully connected to local Stockfish server');
+        return await localResponse.json();
+      }
+    } catch (error) {
+      console.log('Local Stockfish server not available:', error.message);
+    }
+    
+    // Try production server
+    console.log('Trying production Stockfish server...');
+    const prodResponse = await fetch(STOCKFISH_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Origin': 'http://localhost:5173'
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ fen, depth }),
     });
     
-    if (localResponse.ok) {
-      console.log('Successfully connected to local backend');
-      return await localResponse.json();
+    if (!prodResponse.ok) {
+      throw new Error('Failed to get Stockfish analysis');
     }
-  } catch (error) {
-    console.log('Local backend not available:', error.message);
-  }
-  
-  // Next try production backend
-  try {
-    console.log('Trying production backend...');
-    const prodResponse = await fetch(PRODUCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Origin': 'http://localhost:5173'
-      },
-      body: JSON.stringify(data),
-    });
     
-    if (prodResponse.ok) {
-      console.log('Successfully connected to production backend');
-      return await prodResponse.json();
-    }
+    console.log('Successfully connected to production Stockfish server');
+    return await prodResponse.json();
   } catch (error) {
-    console.log('Production backend not available:', error.message);
+    console.error('Stockfish API error:', error);
+    
+    // Return mock analysis
+    console.log('Using mock Stockfish analysis');
+    
+    // Simulate network delay
+    await delay(500);
+    
+    return {
+      fen,
+      depth,
+      evaluation: '0.00',
+      bestMoves: [
+        { uci: 'e2e4', san: 'e4' },
+        { uci: 'g1f3', san: 'Nf3' },
+        { uci: 'd2d4', san: 'd4' }
+      ]
+    };
   }
-
-  // Finally, fall back to mock responses
-  console.log('Using mock responses as fallback');
-  
-  // Simulate network delay between 500-1500ms
-  const delayTime = 500 + Math.random() * 1000;
-  await delay(delayTime);
-  
-  return getMockAnalysis(data.fen, data.playerLevel);
-}
+};
 
 /**
- * Get AI-powered analysis for a chess position
- * 
- * @param {string} fen - FEN string representing the chess position
- * @param {string} evaluation - Stockfish evaluation (e.g. "+0.5")
- * @param {Array} bestMoves - Array of best moves, each with san and uci properties
- * @param {string} playerLevel - Skill level of player (beginner, intermediate, advanced)
- * @returns {Promise} - Promise resolving to the analysis result
+ * Get AI explanation for a chess position
+ * @param {string} fen - FEN string of the position
+ * @param {string} evaluation - Stockfish evaluation
+ * @param {Array} bestMoves - Best moves from Stockfish
+ * @param {string} playerLevel - Skill level
+ * @returns {Promise} - AI explanation
+ */
+export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
+  try {
+    // First try local Gemini server
+    try {
+      console.log('Trying local Gemini server...');
+      const localResponse = await fetch(LOCAL_GEMINI_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'http://localhost:5173'
+        },
+        body: JSON.stringify({
+          fen,
+          evaluation,
+          bestMoves,
+          playerLevel
+        }),
+      });
+      
+      if (localResponse.ok) {
+        console.log('Successfully connected to local Gemini server');
+        return await localResponse.json();
+      }
+    } catch (error) {
+      console.log('Local Gemini server not available:', error.message);
+    }
+    
+    // Try production Gemini server
+    console.log('Trying production Gemini server...');
+    const prodResponse = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': 'http://localhost:5173'
+      },
+      body: JSON.stringify({
+        fen,
+        evaluation,
+        bestMoves,
+        playerLevel
+      }),
+    });
+    
+    if (!prodResponse.ok) {
+      throw new Error('Failed to get Gemini explanation');
+    }
+    
+    console.log('Successfully connected to production Gemini server');
+    return await prodResponse.json();
+  } catch (error) {
+    console.error('Gemini API error:', error);
+    
+    // Return mock explanation
+    console.log('Using mock explanation');
+    
+    // Simulate network delay
+    await delay(1000);
+    
+    return getMockAnalysis(fen, playerLevel);
+  }
+};
+
+/**
+ * For backward compatibility - combines both Stockfish and Gemini in one call
+ * @param {string} fen - FEN string
+ * @param {string} evaluation - Stockfish evaluation
+ * @param {Array} bestMoves - Best moves
+ * @param {string} playerLevel - Skill level
+ * @returns {Promise} - Analysis with explanation
  */
 export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
-  return fetchWithFallback({
-    fen,
-    evaluation, 
-    bestMoves,
-    playerLevel,
-  });
+  return getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
 };
 
 /**
  * Test endpoint that uses mock responses if real backend is unavailable
  */
 export const testAnalysis = async (fen, playerLevel = 'beginner') => {
-  return fetchWithFallback({ 
-    fen,
+  // First try to get Stockfish analysis
+  const stockfishResult = await getStockfishAnalysis(fen);
+  
+  // Then get Gemini explanation
+  return getGeminiExplanation(
+    fen, 
+    stockfishResult.evaluation, 
+    stockfishResult.bestMoves, 
     playerLevel
-  });
+  );
 };
