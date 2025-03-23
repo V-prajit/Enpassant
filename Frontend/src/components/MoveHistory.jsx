@@ -11,8 +11,8 @@ const MoveHistory = ({ history, onMoveClick }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-2 transition-all duration-300 hover:shadow-lg">
-      <h3 className="text-xl font-semibold text-gray-900 mb-2">Move History</h3>
+    <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
+      <h3 className="text-xl font-semibold text-gray-900 mb-4">Move History</h3>
       <div className="moves-container h-[300px] overflow-y-auto border border-gray-200 rounded bg-gray-50">
         <table className="w-full table-auto border-collapse text-sm">
           <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">

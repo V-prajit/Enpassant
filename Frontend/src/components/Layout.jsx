@@ -124,8 +124,8 @@ const Layout = () => {
         </div>
         
         {/* Right Column: Analysis and Chat */}
-        <div className="flex-1 min-w-[300px] bg-white rounded-md shadow-sm p-4">
-        <ChatInterface 
+        <div className="flex flex-col gap-4 flex-1 min-w-[300px] bg-white rounded-md shadow-sm p-4">
+        <ChatInterface
             fen={fen} 
             evaluation={evaluation} 
             bestMoves={bestMoves}
