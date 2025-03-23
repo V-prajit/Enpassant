@@ -1,612 +1,505 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { getGeminiExplanation } from '../services/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
+import { Chess } from 'chess.js';
+import { speakText, prepareAnalysisForSpeech, stopSpeech } from '../utils/speechSynthesis';
 
-const ChatInterface = ({ fen, evaluation, bestMoves }) => {
-  const playerLevel = 'advanced';
-  const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+const AnalysisPanel = ({ 
+  fen, 
+  onSelectMove, 
+  onEvaluationChange,
+  onBestMovesChange,
+  onPlayerLevelChange,
+  onAnalyzingChange,
+  playerLevel: initialPlayerLevel = 'beginner'
+}) => {
+  const [evaluation, setEvaluation] = useState('0.0');
+  const [bestMoves, setBestMoves] = useState([]);
+  const [explanation, setExplanation] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const messagesEndRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const [recognitionStatus, setRecognitionStatus] = useState('');
-
-  const initializeSpeechRecognition = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.error('Speech recognition not supported in this browser');
-      setRecognitionStatus('Speech recognition not supported in this browser. Try using Chrome or Edge.');
-      return null;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 5;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setRecognitionStatus('Listening...');
-      setIsRecording(true);
-    };
-
-    const processChessNotation = (text) => {
-      const fileCorrections = {
-        'ay': 'a', 'a': 'a',
-        'bee': 'b', 'be': 'b', 'b': 'b',
-        'see': 'c', 'sea': 'c', 'c': 'c',
-        'dee': 'd', 'de': 'd', 'd': 'd',
-        'e': 'e', 'ee': 'e',
-        'f': 'f', 'ef': 'f',
-        'gee': 'g', 'g': 'g', 'ji': 'g',
-        'aitch': 'h', 'h': 'h'
-      };
-
-      const rankCorrections = {
-        'one': '1', '1': '1',
-        'two': '2', 'to': '2', '2': '2', 'too': '2',
-        'three': '3', '3': '3', 'tree': '3',
-        'four': '4', 'for': '4', '4': '4',
-        'five': '5', '5': '5',
-        'six': '6', '6': '6',
-        'seven': '7', '7': '7',
-        'eight': '8', '8': '8', 'ate': '8'
-      };
-
-      const pieceCorrections = {
-        'knight': 'N', 'night': 'N', 'net': 'N',
-        'bishop': 'B',
-        'rook': 'R', 'ruck': 'R', 'rock': 'R',
-        'queen': 'Q',
-        'king': 'K',
-        'pawn': ''
-      };
-
-      let processed = text
-        .toLowerCase()
-        .split(' ')
-        .map(word => {
-          if (fileCorrections[word]) return fileCorrections[word];
-          if (rankCorrections[word]) return rankCorrections[word];
-          if (pieceCorrections[word] !== undefined) return pieceCorrections[word];
-          return word;
-        })
-        .join(' ');
-
-      // Common replacements
-      processed = processed
-        .replace(/move from/gi, '')
-        .replace(/move to/gi, '')
-        .replace(/captures on/gi, 'x')
-        .replace(/captures/gi, 'x')
-        .replace(/takes on/gi, 'x')
-        .replace(/takes/gi, 'x')
-        .replace(/to/gi, '')
-        .replace(/castle/gi, 'O-O')
-        .replace(/queen side castle/gi, 'O-O-O')
-        .replace(/long castle/gi, 'O-O-O')
-        .replace(/short castle/gi, 'O-O')
-        .replace(/king side castle/gi, 'O-O')
-        .replace(/check/gi, '+')
-        .replace(/checkmate/gi, '#')
-        .replace(/file/gi, '');
-
-      return processed;
-    };
-
-    recognition.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        let bestTranscript = '';
-        let bestConfidence = 0;
-
-        for (let alt = 0; alt < event.results[i].length; alt++) {
-          const currentTranscript = event.results[i][alt].transcript;
-          const currentConfidence = event.results[i][alt].confidence;
-          if (currentConfidence > bestConfidence) {
-            bestTranscript = currentTranscript;
-            bestConfidence = currentConfidence;
-          }
-        }
-
-        if (event.results[i].isFinal) {
-          finalTranscript += bestTranscript;
-          setRecognitionStatus(`Transcribed with ${(bestConfidence * 100).toFixed(1)}% confidence`);
-        } else {
-          interimTranscript += bestTranscript;
-        }
-      }
-
-      if (finalTranscript) {
-        const processedTranscript = processChessNotation(finalTranscript);
-        setInputText(prev => prev + processedTranscript + ' ');
-      }
-      if (interimTranscript) {
-        setTranscript(processChessNotation(interimTranscript));
-      } else {
-        setTranscript('');
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error', event.error);
-      switch (event.error) {
-        case 'no-speech':
-          setRecognitionStatus('No speech detected. Please try again.');
-          break;
-        case 'audio-capture':
-          setRecognitionStatus('Microphone not available. Check your microphone settings.');
-          break;
-        case 'not-allowed':
-          setRecognitionStatus('Microphone permission denied. Please allow microphone access.');
-          break;
-        case 'network':
-          setRecognitionStatus('Network error. Please check your connection.');
-          break;
-        case 'aborted':
-          setRecognitionStatus('Speech recognition aborted');
-          break;
-        default:
-          setRecognitionStatus(`Error: ${event.error}`);
-      }
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => {
-      if (isRecording) {
-        setTimeout(() => {
-          try {
-            recognition.start();
-            setRecognitionStatus('Listening again...');
-          } catch (error) {
-            console.error('Error restarting speech recognition:', error);
-            setIsRecording(false);
-            setRecognitionStatus('Failed to restart speech recognition. Click microphone to reset.');
-          }
-        }, 300);
-      } else {
-        setRecognitionStatus('');
-      }
-    };
-
-    return recognition;
-  }, [isRecording]);
-
-  const resetSpeechRecognition = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (error) {
-        console.error('Error stopping current speech recognition:', error);
-      }
-    }
-    setIsRecording(false);
-    setRecognitionStatus('Speech recognition reset. Click microphone to start again.');
-    setTranscript('');
-    const newRecognition = initializeSpeechRecognition();
-    if (newRecognition) {
-      recognitionRef.current = newRecognition;
-    }
-  }, [initializeSpeechRecognition]);
-
+  const [playerLevel, setPlayerLevel] = useState('advanced'); // Always use advanced level
+  const [error, setError] = useState(null);
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const [depth, setDepth] = useState(22);
+  const [modelInfo, setModelInfo] = useState(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechRate, setSpeechRate] = useState(1.0);
+  const [autoSpeak, setAutoSpeak] = useState(false);
+  
+  // Effect to update parent component with changes to evaluation
   useEffect(() => {
-    const recognition = initializeSpeechRecognition();
-    if (recognition) {
-      recognitionRef.current = recognition;
+    if (onEvaluationChange) {
+      onEvaluationChange(evaluation);
     }
+  }, [evaluation, onEvaluationChange]);
+  
+  // Effect to update parent component with changes to bestMoves
+  useEffect(() => {
+    if (onBestMovesChange) {
+      onBestMovesChange(bestMoves);
+    }
+  }, [bestMoves, onBestMovesChange]);
+  
+  // Effect to update parent component with changes to isAnalyzing
+  useEffect(() => {
+    if (onAnalyzingChange) {
+      onAnalyzingChange(isAnalyzing);
+    }
+  }, [isAnalyzing, onAnalyzingChange]);
+  
+  // Cleanup speech synthesis when component unmounts
+  useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch (error) {
-          console.error('Error stopping speech recognition on unmount:', error);
+      // Cancel any ongoing speech when component unmounts
+      stopSpeech();
+    };
+  }, []);
+  
+  // Player level is always 'advanced' now - this function is maintained 
+  // for compatibility with parent components but doesn't change anything
+  const handlePlayerLevelChange = (level) => {
+    // No-op - player level is always 'advanced'
+    if (onPlayerLevelChange) {
+      onPlayerLevelChange('advanced');
+    }
+  };
+  
+  // Use refs to track the latest state for use in effect dependencies
+  const lastAnalyzedFen = useRef('');
+  const analysisTimeoutRef = useRef(null);
+  
+  const handleAnalyze = async (analysisDepth = depth) => {
+    if (!fen || isAnalyzing) return;
+    
+    lastAnalyzedFen.current = fen;
+    
+    setIsAnalyzing(true);
+    setError(null);
+    
+    try {
+      const chess = new Chess(fen);
+      const isCheckmate = chess.isCheckmate()
+
+      if (isCheckmate){
+        const winner = chess.turn() === 'w' ? 'Black' : 'White';
+        setEvaluation(`Checkmate = ${winner} wins`);
+        setBestMoves([{ 
+          uci: "0000", 
+          san: "Checkmate",
+          isCheckmate: true,
+          winner: winner
+        }]);
+        setIsAnalyzing(false);
+
+        return;
+      }
+      
+      // Start analysis with the specified depth
+      console.log(`Starting analysis at depth ${depth}...`);
+      
+      // Set up a progress handler for analysis updates
+      const analysisUpdateHandler = (progressResult) => {
+        if (lastAnalyzedFen.current !== fen) return;
+        
+        const analysisDepth = progressResult.depth || 0;
+        const source = progressResult.source || 'cloud';
+        
+        console.log(`Analysis update from ${source}: depth ${analysisDepth}, eval: ${progressResult.evaluation}`);
+        
+        // Always show results as they come in
+        setEvaluation(progressResult.evaluation);
+        
+        if (progressResult.bestMoves && progressResult.bestMoves.length > 0) {
+          // Make sure to copy the source and depth to each move
+          const enhancedMoves = progressResult.bestMoves.map(move => ({
+            ...move,
+            source: source,
+            depth: analysisDepth
+          }));
+          setBestMoves(enhancedMoves);
         }
+        
+        // Consider analysis complete when:
+        // 1. We get a cloud result at or above target depth
+        // 2. We get a completed flag from either source
+        if ((source === 'cloud' && analysisDepth >= depth) || progressResult.completed) {
+          setIsAnalyzing(false);
+        }
+      };
+      
+      // Call Stockfish analysis which manages both sources
+      await getStockfishAnalysis(
+        fen, 
+        analysisDepth,
+        analysisUpdateHandler
+      );
+    } catch (error) {
+      console.error('Stockfish analysis error:', error);
+      setError('Analysis unavailable. Try again or adjust depth.');
+      setIsAnalyzing(false);
+    }
+    
+    // In case we need to cancel while analysis is running
+    return () => {
+      // Mark this position as no longer being analyzed
+      if (lastAnalyzedFen.current === fen) {
+        setIsAnalyzing(false);
+      }
+    }
+  };
+  
+  // Automatically analyze when the FEN changes if autoAnalyze is enabled
+  useEffect(() => {
+    if (!fen || !autoAnalyze) return;
+    
+    // Clear any pending analysis
+    if (analysisTimeoutRef.current) {
+      clearTimeout(analysisTimeoutRef.current);
+    }
+    
+    // Don't analyze if we've already analyzed this position
+    if (lastAnalyzedFen.current === fen) return;
+    
+    // Analyze immediately for maximum speed
+    const analyzeCleanup = handleAnalyze();
+    
+    return () => {
+      // Clean up by both clearing the timeout and calling the cleanup function from handleAnalyze
+      if (analysisTimeoutRef.current) {
+        clearTimeout(analysisTimeoutRef.current);
+      }
+      if (typeof analyzeCleanup === 'function') {
+        analyzeCleanup();
       }
     };
-  }, [initializeSpeechRecognition]);
+  }, [fen, autoAnalyze]);
+  
+  // State to track response time
+  const [responseTime, setResponseTime] = useState(null);
+  
+  const handleGetExplanation = async (useDeepThink = false) => {
+    if (!fen || isLoading) return;
+   
+    const isCheckmate = bestMoves.length === 1 && bestMoves[0].isCheckmate;
+    if (!isCheckmate && bestMoves.length === 0) return;
 
-  useEffect(() => {
-    if (messages.length === 0) {
-      setMessages([{
-        role: 'assistant',
-        content: `Welcome to Enpassant! You can ask me any questions about chess or the current position. Try asking:
-        
-• "Why is this move the best?"
-• "What should I focus on in this position?"
-• "Is e4 a good move here?"
-• "How do I improve my pawn structure?"
-• "Can you explain the evaluation?"
-• "What's the idea behind Queen to d5?"
-
-You can type or use the microphone button to speak your question. For chess notation, you can say moves like:
-"Knight to e5" or "e4" or "Queen captures on d7".`
-      }]);
-    }
-  }, []);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleSendMessage = async (text) => {
-    if (!text.trim()) return;
-    setMessages(prev => [...prev, { role: 'user', content: text }]);
-    setInputText('');
-    setTranscript('');
     setIsLoading(true);
-
+    setError(null);
+    setExplanation('');
+    setResponseTime(null);
+    
     try {
-      const response = await getGeminiExplanation(
-        fen,
-        evaluation,
-        bestMoves,
-        'advanced',
-        false,
-        false,
-        text
-      );
+      console.log(`Requesting explanation with ${useDeepThink ? 'Deep Think' : 'standard'} mode`);
+      const clientStartTime = performance.now();
 
-      if (response && response.explanation) {
-        setMessages(prev => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: response.explanation,
-            responseTime: response.responseTime
-          }
-        ]);
+      const isGameReport = isCheckmate;
+
+      // Always use advanced level for all users
+      const result = await getGeminiExplanation(fen, evaluation, bestMoves, 'advanced', isGameReport, false, null, useDeepThink);
+      
+      const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
+      console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
+      
+      if (result && result.explanation) {
+        setExplanation(result.explanation);
+      
+        const finalResponseTime = result.responseTime || clientResponseTime;
+        setResponseTime(finalResponseTime);
+        
+        // Store model information if available
+        if (result.model || result.deepThinkMode !== undefined) {
+          setModelInfo({
+            model: result.model || (result.deepThinkMode ? 'gemini-2.0-pro-exp-02-05' : 'gemini-2.0-flash'),
+            deepThinkMode: result.deepThinkMode === true
+          });
+        }
+        
+        console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
+        
+        // Automatically speak the explanation if autoSpeak is enabled
+        if (autoSpeak) {
+          handleSpeak(result.explanation);
+        }
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'Sorry, I encountered an error processing your question. Please try again.'
-        }
-      ]);
+      console.error('Gemini explanation error:', error);
+      
+      const errorMessage = error.message.includes('AI analysis service') 
+        ? error.message 
+        : `Failed to get AI explanation: ${error.message}. Please try again.`;
+      
+      setError(errorMessage);
+      
+      setExplanation(`Unable to generate AI analysis for this position. Please try again later.`);
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleToggleRecording = useCallback(() => {
-    if (
-      recognitionStatus &&
-      (recognitionStatus.includes('Error') ||
-       recognitionStatus.includes('Failed') ||
-       recognitionStatus.includes('denied'))
-    ) {
-      resetSpeechRecognition();
-      return;
-    }
-
-    if (isRecording) {
-      setIsRecording(false);
-      setRecognitionStatus('Recording stopped');
-      try {
-        recognitionRef.current?.stop();
-      } catch (error) {
-        console.error('Error stopping speech recognition:', error);
-        resetSpeechRecognition();
+  
+  // Handle speaking the analysis out loud
+  const handleSpeak = async (textToSpeak = explanation) => {
+    if (!textToSpeak) return;
+    
+    try {
+      // Stop any ongoing speech
+      if (isSpeaking) {
+        stopSpeech();
+        setIsSpeaking(false);
+        return;
       }
-    } else {
-      setTranscript('');
-      setRecognitionStatus('Starting microphone...');
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ audio: true })
-          .then(() => {
-            try {
-              if (!recognitionRef.current) {
-                const newRecognition = initializeSpeechRecognition();
-                if (newRecognition) {
-                  recognitionRef.current = newRecognition;
-                } else {
-                  throw new Error('Failed to initialize speech recognition');
-                }
-              }
-              recognitionRef.current.start();
-            } catch (error) {
-              console.error('Error starting speech recognition:', error);
-              setIsRecording(false);
-              setRecognitionStatus('Error starting speech recognition. Click microphone to reset.');
-            }
-          })
-          .catch(err => {
-            console.error('Microphone permission error:', err);
-            setIsRecording(false);
-            setRecognitionStatus(
-              'Microphone access denied. Please allow microphone access in your browser settings.'
-            );
-          });
-      } else {
-        console.error('Media devices API not available');
-        setIsRecording(false);
-        setRecognitionStatus('Speech recognition not supported in this browser. Try using Chrome or Edge.');
+      
+      // Process the text for better speech output
+      const processedText = prepareAnalysisForSpeech(textToSpeak);
+      
+      setIsSpeaking(true);
+      
+      await speakText(processedText, {
+        rate: speechRate,
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: (error) => {
+          console.error("Speech synthesis error:", error);
+          setIsSpeaking(false);
+          setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
+        }
+      });
+    } catch (error) {
+      console.error("Failed to speak analysis:", error);
+      setIsSpeaking(false);
+      setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
+    }
+  };
+  
+  // Handle speaking evaluation and best moves
+  const handleSpeakEvaluation = () => {
+    if (!bestMoves || bestMoves.length === 0) return;
+    
+    // Prepare a spoken version of the evaluation and best moves
+    let evalSpeech = `The position evaluation is ${evaluation}. `;
+    
+    if (bestMoves && bestMoves.length > 0) {
+      evalSpeech += `The best move is ${bestMoves[0].san || bestMoves[0].uci}. `;
+      
+      if (bestMoves.length > 1) {
+        evalSpeech += `Alternative moves include ${bestMoves.slice(1, 3).map(move => move.san || move.uci).join(' and ')}.`;
       }
     }
-  }, [isRecording, recognitionStatus, resetSpeechRecognition, initializeSpeechRecognition]);
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Ctrl+Space to toggle speech
-      if (e.ctrlKey && e.code === 'Space') {
-        e.preventDefault();
-        handleToggleRecording();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleRecording]);
+    
+    handleSpeak(evalSpeech);
+  };
 
   return (
-    <div
-      className="
-        bg-white
-        text-gray-900
-        rounded-xl
-        shadow-lg
-        ring-1
-        ring-gray-200
-        p-6
-        transition-all
-        duration-300
-        hover:shadow-xl
-      "
-    >
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold">Enpassant 1.0</h3>
-      </div>
-
-      {/* Messages container */}
-      <div className="h-96 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-md ring-1 ring-gray-200">
-        {messages.length === 0 ? (
-          <div className="text-gray-500 text-center italic">
-            Ask your chess coach a question about the current position...
-          </div>
-        ) : (
-          messages.map((message, index) => (
-            <div
-              key={index}
-              className={`mb-4 flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`
-                  inline-block
-                  max-w-[80%]
-                  p-3
-                  rounded-lg
-                  leading-relaxed
-                  ${
-                    message.role === 'user'
-                      ? 'bg-blue-100 text-gray-900 rounded-tr-none'
-                      : 'bg-gray-100 text-gray-900 rounded-tl-none'
-                  }
-                `}
-              >
-                <div className="whitespace-pre-line">{message.content}</div>
-                {message.responseTime && (
-                  <div className="text-xs opacity-70 text-right mt-1">
-                    {typeof message.responseTime === 'number'
-                      ? `${message.responseTime.toFixed(2)}s`
-                      : `${message.responseTime}s`}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-        {isLoading && (
-          <div className="text-center p-2">
-            <div className="inline-block">
-              <div className="animate-bounce inline-block bg-gray-400 rounded-full w-2 h-2 mr-1"></div>
-              <div
-                className="animate-bounce inline-block bg-gray-400 rounded-full w-2 h-2 mr-1"
-                style={{ animationDelay: '0.2s' }}
-              ></div>
-              <div
-                className="animate-bounce inline-block bg-gray-400 rounded-full w-2 h-2"
-                style={{ animationDelay: '0.4s' }}
-              ></div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Transcript and status display */}
-      {(isRecording || recognitionStatus) && (
-        <div className="mb-3">
-          {transcript && (
-            <div className="p-2 bg-gray-100 text-gray-900 rounded-md italic">
-              {transcript}
-            </div>
-          )}
-          {recognitionStatus && (
-            <div
-              className={`
-                mt-1 text-xs flex items-center
-                ${
-                  recognitionStatus.includes('Error') ||
-                  recognitionStatus.includes('denied')
-                    ? 'text-red-600'
-                    : isRecording
-                    ? 'text-red-600'
-                    : 'text-gray-500'
-                }
-              `}
-            >
-              {isRecording && (
-                <span className="mr-1 inline-block h-2 w-2 rounded-full bg-red-600 animate-pulse"></span>
-              )}
-              {recognitionStatus}
-            </div>
-          )}
-        </div>
+    <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
+      <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
+      
+      <div className="best-moves mb-6">
+  <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
+  {bestMoves.filter(move => move.san).length > 0 ? (
+    <div className="flex gap-3">
+      {bestMoves.filter(move => move.san).slice(0, 5).map((move, index) => (
+        <button
+          key={index}
+          onClick={() => onSelectMove && onSelectMove(move)}
+          className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition-colors duration-200"
+        >
+          <span className="text-sm font-bold text-green-600">
+            {move.san}
+          </span>
+        </button>
+      ))}
+    </div>
+  ) : isAnalyzing ? (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
+      <p className="text-gray-600">Analyzing position...</p>
+    </div>
+  ) : (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <p className="text-gray-600 italic">No suggested moves available</p>
+      {!autoAnalyze && (
+        <button
+          onClick={() => handleAnalyze(depth)}
+          className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
+        >
+          Analyze Now
+        </button>
       )}
+    </div>
+  )}
+</div>
 
-      {/* Input area */}
-      <div className="flex gap-2 items-center">
-        <div className="relative">
-          <button
-            onClick={handleToggleRecording}
-            className={`
-              p-2
-              rounded-full
-              flex
-              items-center
-              justify-center
-              shadow-md
-              transition-colors
-              duration-200
-              ${
-                isRecording
-                  ? 'bg-red-600 text-white animate-pulse hover:bg-red-700'
-                  : recognitionStatus && recognitionStatus.includes('reset')
-                  ? 'bg-gray-500 text-white hover:bg-gray-600'
-                  : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-              }
-            `}
-            title={
-              isRecording
-                ? 'Stop recording (Ctrl+Space)'
-                : recognitionStatus &&
-                  (recognitionStatus.includes('Error') ||
-                   recognitionStatus.includes('Failed'))
-                ? 'Click to reset speech recognition'
-                : 'Start recording (Ctrl+Space)'
-            }
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+      
+      <div className="analysis-settings mb-6">
+        <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
+        <div className="flex flex-wrap gap-3 bg-gray-50 p-3 rounded-md shadow-sm">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="autoAnalyze"
+              checked={autoAnalyze}
+              onChange={() => setAutoAnalyze(!autoAnalyze)}
+              className="mr-2 h-4 w-4"
+            />
+            <label htmlFor="autoAnalyze" className="text-gray-800">Auto-analyze positions</label>
+          </div>
+          
+          <div className="flex items-center ml-4">
+            <label htmlFor="depth" className="mr-2 text-gray-800">Depth:</label>
+            <select
+              id="depth"
+              value={depth}
+              onChange={(e) => setDepth(Number(e.target.value))}
+              className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-              />
-            </svg>
-          </button>
-          {!isRecording &&
-            recognitionStatus &&
-            (recognitionStatus.includes('Error') ||
-             recognitionStatus.includes('Failed') ||
-             recognitionStatus.includes('denied')) && (
-              <button
-                onClick={resetSpeechRecognition}
-                className="
-                  absolute
-                  -top-1
-                  -right-1
-                  bg-red-600
-                  text-white
-                  rounded-full
-                  p-1
-                  w-5
-                  h-5
-                  flex
-                  items-center
-                  justify-center
-                  text-xs
-                  shadow
-                  hover:bg-red-700
-                "
-                title="Reset speech recognition"
-              >
-                ×
-              </button>
-            )}
-        </div>
-
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(inputText)}
-            placeholder={
-              isRecording
-                ? 'Speak your chess question...'
-                : 'Ask about a specific move or position aspect...'
-            }
-            className="
-              w-full
-              p-2
-              rounded-md
-              bg-white
-              text-gray-900
-              border
-              border-gray-300
-              placeholder-gray-400
-              focus:outline-none
-              focus:ring-2
-              focus:ring-gray-500
-            "
-            disabled={isLoading}
-          />
-          {inputText && (
-            <button
-              onClick={() => setInputText('')}
-              className="
-                absolute
-                right-2
-                top-1/2
-                -translate-y-1/2
-                text-gray-400
-                hover:text-gray-600
-              "
-              title="Clear text"
+              <option value="12">12 (Fast)</option>
+              <option value="18">18 (Balanced)</option>
+              <option value="22">22 (Strong)</option>
+              <option value="26">26 (Deeper)</option>
+              <option value="32">32 (Maximum)</option>
+            </select>
+          </div>
+          
+          {!autoAnalyze && (
+            <button 
+              onClick={() => handleAnalyze(depth)} 
+              disabled={isAnalyzing || !fen}
+              className={`text-sm py-1 px-3 rounded-md shadow-sm transition-all duration-200 ${isAnalyzing || !fen ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 text-white'}`}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
+              {isAnalyzing ? 'Analyzing...' : 'Analyze Now'}
             </button>
           )}
         </div>
-
-        <button
-          onClick={() => handleSendMessage(inputText)}
-          disabled={!inputText.trim() || isLoading}
-          className={`
-            px-4
-            py-2
-            rounded-md
-            font-medium
-            shadow-md
-            transition-colors
-            duration-200
-            ${
-              !inputText.trim() || isLoading
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-gray-800 text-white hover:bg-gray-900'
-            }
-          `}
-        >
-          Send
-        </button>
       </div>
+
+      <div className="ai-explanation mb-6">
+        <div className="controls flex flex-wrap gap-3 mb-4">
+          
+          <button 
+            onClick={() => handleGetExplanation(true)} 
+            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
+            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
+              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}`}
+          >
+            {isLoading ? 'Loading explanation...' : 'Deep Think Analysis'}
+          </button>
+        </div>
+        
+        {error && (
+          <div className="text-red-600 bg-red-50 py-2 px-4 rounded-md mb-4">
+            {error}
+          </div>
+        )}
+        
+        <div className="explanation-content p-4 bg-gray-50 rounded-md shadow-sm text-gray-800 whitespace-pre-line">
+          {isLoading ? (
+            <p className="text-gray-600 italic">Getting AI explanation...</p>
+          ) : explanation ? (
+            <div>
+              <p>{explanation}</p>
+              {responseTime && (
+                <p className="text-xs text-gray-500 mt-2 text-right">
+                  Generated in {typeof responseTime === 'number' ? responseTime.toFixed(2) : responseTime}s
+                  {modelInfo && (
+                    <span className="ml-2">
+                      using {modelInfo.deepThinkMode ? 
+                        <span className="text-blue-600 font-medium">Gemini Pro 2.0 (Deep Think)</span> : 
+                        <span>Gemini Flash 2.0</span>}
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-600">First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
+          )}
+        </div>
+      </div>
+<div className="voice-controls">
+  <h4 className="text-md font-medium text-gray-700 mb-2">Voice Output</h4>
+  <div className="bg-gray-50 p-3 rounded-md shadow-sm mb-4">
+    <div className="flex flex-wrap gap-4 mb-3">
+      <div className="flex items-center">
+        <input
+          type="checkbox"
+          id="autoSpeak"
+          checked={autoSpeak}
+          onChange={() => setAutoSpeak(!autoSpeak)}
+          className="mr-2 h-4 w-4"
+        />
+        <label htmlFor="autoSpeak" className="text-gray-800">Auto-speak analysis</label>
+      </div>
+      
+      <div className="flex items-center">
+        <label htmlFor="speechRate" className="mr-2 text-gray-800">Speech Rate:</label>
+        <select
+          id="speechRate"
+          value={speechRate}
+          onChange={(e) => setSpeechRate(Number(e.target.value))}
+          className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
+        >
+          <option value="1.0">1x</option>
+          <option value="1.5">1.5x</option>
+          <option value="2.0">2x</option>
+          <option value="2.5">2.5x</option>
+          <option value="3.0">3x</option>
+        </select>
+      </div>
+    </div>
+    
+    <div className="flex gap-2">
+      <button 
+        onClick={() => handleSpeak()}
+        disabled={!explanation || isLoading}
+        className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
+          !explanation || isLoading 
+            ? 'bg-gray-400 cursor-not-allowed' 
+            : isSpeaking
+              ? 'bg-red-500 hover:bg-red-600'
+              : 'bg-gray-700 hover:bg-gray-800'
+        }`}
+      >
+        {isSpeaking ? (
+          <>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+            </svg>
+            Stop Speaking
+          </>
+        ) : (
+          <>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728">
+              </path>
+            </svg>
+            Speak Analysis
+          </>
+        )}
+      </button>
+      
+      <button 
+        onClick={handleSpeakEvaluation}
+        disabled={!bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing}
+        className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
+          !bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing
+            ? 'bg-gray-400 cursor-not-allowed' 
+            : 'bg-green-600 hover:bg-green-700'
+        }`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3"></path>
+        </svg>
+        Speak Evaluation
+      </button>
+    </div>
+  </div>
+</div>
     </div>
   );
 };
 
-export default ChatInterface;
+export default AnalysisPanel;

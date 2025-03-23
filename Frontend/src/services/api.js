@@ -1,6 +1,10 @@
 const GEMINI_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
 const CLOUD_STOCKFISH_URL = 'http://34.42.200.208:8080'; // VM-based Stockfish server
 const FUNCTION_STOCKFISH_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish';
+// Use browser speech recognition as a fallback when cloud transcription fails
+export const GEMINI_AUDIO_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/transcribeAudioWithGemini';
+// Flag to check if the audio service is working
+let audioServiceWorking = true;
 
 const API_TIMEOUT = 10000;
 const GEMINI_TIMEOUT = 60000;
@@ -277,26 +281,37 @@ async function tryServerAnalysis(serverUrl, fen, depth, onUpdate) {
     const statusUrl = `${serverUrl}/status/${encodeURIComponent(fen)}?minDepth=${effectiveDepth}`;
     
     console.log(`Checking for cached analysis at target depth ${effectiveDepth} from ${isVmServer ? 'VM' : 'Cloud Function'}: ${statusUrl}`);
-    const cachedResponse = await fetchWithTimeout(statusUrl, { method: 'GET' }, 3000);
+    let cachedResult = null;
     
-    if (cachedResponse.ok) {
-      const cachedResult = await cachedResponse.json();
-      console.log(`Found cached analysis at depth ${cachedResult.depth}`);
+    try {
+      const cachedResponse = await fetchWithTimeout(statusUrl, { method: 'GET' }, 3000);
       
-      // Add source information
-      cachedResult.source = 'cloud';
-      
-      if (onUpdate) {
-        onUpdate(cachedResult);
+      if (cachedResponse.ok) {
+        cachedResult = await cachedResponse.json();
+        console.log(`Found cached analysis at depth ${cachedResult.depth}`);
+        
+        // Add source information
+        cachedResult.source = 'cloud';
+        
+        if (onUpdate) {
+          onUpdate(cachedResult);
+        }
+        
+        // Only use cached result if it meets our depth requirements
+        if (cachedResult.depth >= (isVmServer ? depth : effectiveDepth)) {
+          console.log(`Using cached result with depth ${cachedResult.depth} directly`);
+          return cachedResult;
+        }
+      } else {
+        console.warn(`Cache check returned status ${cachedResponse.status} - continuing to full analysis`);
       }
+    } catch (fetchError) {
+      console.warn(`Error fetching cached results: ${fetchError.message}`);
+    }
       
-      // Only use cached result if it meets our depth requirements
-      if (cachedResult.depth >= (isVmServer ? depth : effectiveDepth)) {
-        console.log(`Using cached result with depth ${cachedResult.depth} directly`);
-        return cachedResult;
-      }
-      
-      // Otherwise, continue with polling for deeper analysis
+    // Check if we have a valid cached result before continuing with polling
+    if (cachedResult) {
+      // Continue with polling for deeper analysis using the cached result as baseline
       console.log(`Using cached result as baseline at depth ${cachedResult.depth}, continuing analysis`);
       let currentDepth = cachedResult.depth;
       let lastResult = cachedResult;
@@ -350,9 +365,12 @@ async function tryServerAnalysis(serverUrl, fen, depth, onUpdate) {
         }, 200); // Poll every 200ms
       });
     }
+    
+    console.log('No usable cached analysis found, proceeding with full analysis');
+    
   } catch (cacheError) {
     // Ignore cache check errors, proceed with full analysis
-    console.log('No cached analysis found or error checking cache:', cacheError);
+    console.log('Error in cache checking process:', cacheError);
     console.log('Performing full analysis');
   }
   
@@ -533,4 +551,94 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
 
 export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   return getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
+};
+
+/**
+ * Send audio recording to Gemini for transcription
+ * @param {Blob} audioBlob - The recorded audio blob
+ * @param {string} fen - The current chess position FEN (for context)
+ * @returns {Promise<string>} - Promise that resolves with the transcribed text
+ */
+export const sendAudioToGemini = async (audioBlob, fen) => {
+  try {
+    // If we've already determined the service isn't working, fail fast
+    if (!audioServiceWorking) {
+      throw new Error('Audio transcription service is not available');
+    }
+
+    // Check audio size - fail early if it's empty (using lower threshold to match frontend)
+    if (!audioBlob || audioBlob.size < 500) {
+      console.error('Audio blob is empty or too small:', audioBlob?.size || 0, 'bytes');
+      throw new Error('Audio recording is too short or empty. Please try again and speak clearly.');
+    }
+
+    console.log(`Sending audio for transcription (${Math.round(audioBlob.size / 1024)} KB)...`);
+    const startTime = performance.now();
+    
+    // Create a FormData object to send the audio file
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm');
+    
+    // Add chess context
+    if (fen) {
+      formData.append('fen', fen);
+      formData.append('context', 'chess');
+    }
+    
+    // Use a longer timeout for audio processing
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30s)
+    
+    try {
+      console.log(`Sending audio to ${GEMINI_AUDIO_URL}...`);
+      const response = await fetch(GEMINI_AUDIO_URL, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'omit'
+      });
+      
+      if (!response.ok) {
+        console.error(`Audio transcription failed with status: ${response.status}`);
+        // Mark the service as not working if we get a CORS or 5xx error
+        if (response.status === 0 || response.status >= 500) {
+          audioServiceWorking = false;
+          console.warn('Audio transcription service marked as unavailable');
+        }
+        throw new Error(`Failed to transcribe audio: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      const processingTime = Math.round((performance.now() - startTime) / 1000);
+      
+      if (!result.transcription) {
+        console.error('No transcription in response:', result);
+        throw new Error('No transcription returned from server');
+      }
+      
+      // Service is working if we get here
+      audioServiceWorking = true;
+      console.log(`Audio transcribed in ${processingTime}s: "${result.transcription}"`);
+      
+      return result.transcription;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  } catch (error) {
+    console.error('Error transcribing audio:', error);
+    
+    // If we get a network error or CORS error, mark the service as not working
+    if (error.message.includes('Failed to fetch') || 
+        error.message.includes('NetworkError') ||
+        error.message.includes('CORS')) {
+      audioServiceWorking = false;
+      console.warn('Audio transcription service marked as unavailable due to network error');
+    }
+    
+    throw new Error(`Failed to transcribe audio: ${error.message}`);
+  }
 };
