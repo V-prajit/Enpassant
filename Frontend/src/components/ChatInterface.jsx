@@ -413,7 +413,7 @@ You can type or use the microphone button to speak your question. For chess nota
   return (
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
+        <h3 className="text-xl font-semibold text-gray-900">Enpassant</h3>
         <div className="flex items-center gap-2">
           <div className="flex items-center mr-2">
             <input
