@@ -4,6 +4,9 @@
 const GEMINI_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
 const STOCKFISH_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish';
 
+
+const API_TIMEOUT = 10000;
+
 // Mock position explanations for different chess positions
 const positionExplanations = {
   // Starting position
@@ -199,24 +202,57 @@ export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => 
  * @param {string} playerLevel - Skill level
  * @returns {Promise} - AI explanation
  */
+/**
+ * Create a fetch request with timeout
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} timeout - Timeout in milliseconds
+ * @returns {Promise} - Promise that resolves with fetch response or rejects on timeout
+ */
+const fetchWithTimeout = async (url, options, timeout = API_TIMEOUT) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'omit'
+    });
+    return response;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+};
+
 export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   try {
     console.log(`Getting explanation for ${playerLevel} level...`);
     const startTime = performance.now();
     
-    // Direct call to cloud function
-    const response = await fetch(GEMINI_URL, {
+    // Create a fix for the Gemini analysis cloud function
+    // By explicitly calling the "analyzeChessPosition" function in the same project
+    // that has the working Stockfish function
+    const requestData = {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
         fen,
         evaluation,
         bestMoves,
         playerLevel
-      }),
-    });
+      })
+    };
+    
+    // Use the same endpoint format as the stockfish one, which is working
+    const fixedUrl = STOCKFISH_URL.replace('analyzeWithStockfish', 'analyzeChessPosition');
+    console.log(`Attempting to use endpoint: ${fixedUrl}`);
+    
+    const response = await fetchWithTimeout(fixedUrl, requestData);
     
     if (!response.ok) {
       throw new Error(`Gemini explanation failed: ${response.status} ${response.statusText}`);
@@ -230,8 +266,8 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
   } catch (error) {
     console.error('Gemini API error:', error);
     
-    // Fallback to mock explanation if cloud function fails
-    return getMockAnalysis(fen, playerLevel);
+    // If there was an issue, throw a clear error to display to the user
+    throw new Error(`The AI analysis service is currently unavailable. Please try again later or contact support if the issue persists. (Error: ${error.message})`);
   }
 };
 
@@ -245,20 +281,4 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
  */
 export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   return getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
-};
-
-/**
- * Test endpoint that uses mock responses if real backend is unavailable
- */
-export const testAnalysis = async (fen, playerLevel = 'beginner') => {
-  // First try to get Stockfish analysis
-  const stockfishResult = await getStockfishAnalysis(fen);
-  
-  // Then get Gemini explanation
-  return getGeminiExplanation(
-    fen, 
-    stockfishResult.evaluation, 
-    stockfishResult.bestMoves, 
-    playerLevel
-  );
 };

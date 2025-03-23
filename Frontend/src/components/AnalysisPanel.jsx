@@ -88,13 +88,31 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     
     setIsLoading(true);
     setError(null);
+    setExplanation(''); // Clear previous explanation
     
     try {
+      console.log(`Requesting explanation for ${playerLevel} level player`);
+      
+      // Make sure we're passing the correct level
       const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
-      setExplanation(result.explanation);
+      
+      if (result && result.explanation) {
+        setExplanation(result.explanation);
+      } else {
+        throw new Error('Empty or invalid response from AI service');
+      }
     } catch (error) {
       console.error('Gemini explanation error:', error);
-      setError('Failed to get AI explanation');
+      
+      // Display a more detailed error message for clarity
+      const errorMessage = error.message.includes('AI analysis service') 
+        ? error.message 
+        : `Failed to get AI explanation: ${error.message}. Please try again.`;
+      
+      setError(errorMessage);
+      
+      // Also show a fallback message in the explanation area
+      setExplanation(`Unable to generate AI analysis for this position at ${playerLevel} level. Please try again later or select a different skill level.`);
     } finally {
       setIsLoading(false);
     }

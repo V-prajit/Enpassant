@@ -373,8 +373,8 @@ function analyzePosition(fen, depth) {
     stockfish.stdin.write("uci\n");
     
     // Configure Stockfish with MAXIMUM SPEED settings for ultra-fast analysis
-    stockfish.stdin.write("setoption name Threads value 8\n"); // Increase to 8 for faster computation
-    stockfish.stdin.write("setoption name Hash value 256\n"); // Increase hash table for better caching
+    stockfish.stdin.write("setoption name Threads value 16\n"); 
+    stockfish.stdin.write("setoption name Hash value 512\n"); // Increase hash table for better caching
     stockfish.stdin.write("setoption name MultiPV value 1\n"); // Only compute best line for speed
     
     // Extreme speed optimizations - chess.com style instant feedback

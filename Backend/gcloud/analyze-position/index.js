@@ -31,9 +31,19 @@ exports.analyzeChessPosition = async (req, res) => {
     if (!fen) {
       return res.status(400).json({ error: 'FEN position is required' });
     }
+    
+    // Validate playerLevel and set default if invalid
+    const validLevels = ['beginner', 'intermediate', 'advanced'];
+    const validatedLevel = validLevels.includes(playerLevel) ? playerLevel : 'beginner';
+    
+    console.log(`Analyzing position for ${validatedLevel} player:`, {
+      fen,
+      evaluation: evaluation || 'Not provided',
+      moves: bestMoves ? `${bestMoves.length} moves` : 'None'
+    });
 
     const prompt = `
-    As a chess coach, explain this position to a ${playerLevel || 'beginner'} player:
+    As a chess coach, explain this position to a ${validatedLevel} player:
     
     FEN: ${fen}
     Stockfish evaluation: ${evaluation || 'Not available'}
@@ -43,7 +53,12 @@ exports.analyzeChessPosition = async (req, res) => {
     1. The key features of this position
     2. Strategic ideas for both sides
     3. Concrete tactical opportunities if any
-    4. Simple advice for improving play
+    4. Simple advice for improving play at the ${validatedLevel} level
+    
+    Tailor your explanation specifically for a ${validatedLevel} player. 
+    For beginner: focus on basic concepts and simple strategies.
+    For intermediate: include positional concepts and tactical patterns.
+    For advanced: provide deeper strategic analysis and calculation of lines.
     `;
 
     const result = await generativeModel.generateContent({
