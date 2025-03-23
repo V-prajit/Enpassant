@@ -11,40 +11,46 @@ const MoveHistory = ({ history, onMoveClick }) => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">Move History</h3>
-      <div className="moves-container h-[400px] overflow-y-auto border border-gray-200 rounded-lg bg-gray-50">
-        <table className="w-full table-auto border-collapse text-sm">
-          <thead className="bg-gray-100 sticky top-0 z-10 shadow-sm">
-            <tr>
-              <th className="w-[20%] py-3 px-4 text-left font-medium text-gray-700 border-b border-gray-200">Move</th>
-              <th className="w-[40%] py-3 px-4 text-left font-medium text-gray-700 border-b border-gray-200">White</th>
-              <th className="w-[40%] py-3 px-4 text-left font-medium text-gray-700 border-b border-gray-200">Black</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedMoves.map((pair) => (
-              <tr 
-                key={pair.number} 
-                className="border-b border-gray-200 last:border-b-0 odd:bg-white even:bg-gray-50 transition-colors duration-200 hover:bg-gray-100"
-              >
-                <td className="py-3 px-4 text-gray-600 font-medium">{pair.number}.</td>
-                <td 
-                  className={`py-3 px-4 text-gray-800 ${onMoveClick ? 'cursor-pointer hover:text-gray-900 hover:font-semibold' : 'cursor-default'}`} 
-                  onClick={() => onMoveClick && onMoveClick(pair.white)}
-                >
-                  {pair.white.san}
-                </td>
-                <td 
-                  className={`py-3 px-4 text-gray-800 ${pair.black && onMoveClick ? 'cursor-pointer hover:text-gray-900 hover:font-semibold' : 'cursor-default'}`} 
-                  onClick={() => pair.black && onMoveClick && onMoveClick(pair.black)}
-                >
-                  {pair.black ? pair.black.san : '—'}
-                </td>
+    <div className="analysis-panel">
+      <div className="analysis-panel-header">Move History</div>
+      <div className="move-history h-[300px] overflow-y-auto pr-2">
+        {groupedMoves.length > 0 ? (
+          <table className="w-full">
+            <thead className="bg-[rgba(255,255,255,0.05)] sticky top-0 z-10">
+              <tr>
+                <th className="w-[20%] py-2 px-3 text-left font-medium text-gray-300 text-sm">#</th>
+                <th className="w-[40%] py-2 px-3 text-left font-medium text-gray-300 text-sm">White</th>
+                <th className="w-[40%] py-2 px-3 text-left font-medium text-gray-300 text-sm">Black</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {groupedMoves.map((pair) => (
+                <tr 
+                  key={pair.number} 
+                  className="border-b border-[rgba(255,255,255,0.05)] last:border-b-0 hover:bg-[rgba(255,255,255,0.05)]"
+                >
+                  <td className="py-2 px-3 text-accent-color font-medium">{pair.number}.</td>
+                  <td 
+                    className={`py-2 px-3 text-gray-200 ${onMoveClick ? 'cursor-pointer hover:text-white hover:font-medium' : 'cursor-default'}`} 
+                    onClick={() => onMoveClick && onMoveClick(pair.white)}
+                  >
+                    {pair.white.san}
+                  </td>
+                  <td 
+                    className={`py-2 px-3 text-gray-200 ${pair.black && onMoveClick ? 'cursor-pointer hover:text-white hover:font-medium' : 'cursor-default'}`} 
+                    onClick={() => pair.black && onMoveClick && onMoveClick(pair.black)}
+                  >
+                    {pair.black ? pair.black.san : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-400 italic">No moves yet</p>
+          </div>
+        )}
       </div>
     </div>
   );

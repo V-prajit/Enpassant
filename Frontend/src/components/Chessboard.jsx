@@ -73,13 +73,13 @@ const Chessboard = ({
           // Otherwise, just move
           onMove(selectedSquare, square);
         }
-        // Deselect afterwards (either we moved or the move wasn’t legal)
+        // Deselect afterwards (either we moved or the move wasn't legal)
         setSelectedSquare(null);
         setLegalMoves([]);
         return;
       }
 
-      // No square previously selected: attempt to select if it’s a valid piece
+      // No square previously selected: attempt to select if it's a valid piece
       if (
         !piece ||
         piece === '.' ||
@@ -146,13 +146,13 @@ const Chessboard = ({
 
   // Highlight last move if available
   if (lastMove && Array.isArray(lastMove) && lastMove.length === 2) {
-    customSquareStyles[lastMove[0]] = { backgroundColor: 'rgba(155, 199, 0, 0.41)' };
-    customSquareStyles[lastMove[1]] = { backgroundColor: 'rgba(155, 199, 0, 0.41)' };
+    customSquareStyles[lastMove[0]] = { backgroundColor: 'rgba(114, 9, 183, 0.3)' };
+    customSquareStyles[lastMove[1]] = { backgroundColor: 'rgba(114, 9, 183, 0.3)' };
   }
 
   // Highlight the currently selected square
   if (selectedSquare) {
-    customSquareStyles[selectedSquare] = { backgroundColor: 'rgba(255, 215, 0, 0.4)' };
+    customSquareStyles[selectedSquare] = { backgroundColor: 'rgba(76, 201, 240, 0.4)' };
   }
 
   // Style legal moves
@@ -162,15 +162,15 @@ const Chessboard = ({
       if (!move.to) return;
       const targetPiece = getPieceAtSquare(move.to);
       if (targetPiece && targetPiece !== '.') {
-        // capturing square => hollow grey circle
+        // capturing square => hollow circle
         customSquareStyles[move.to] = {
-          background: 'radial-gradient(circle, transparent 55%, gray 60%, transparent 65%)',
+          background: 'radial-gradient(circle, transparent 55%, rgba(76, 201, 240, 0.8) 60%, transparent 65%)',
           cursor: 'pointer',
         };
       } else {
         // normal move => dot
         customSquareStyles[move.to] = {
-          background: 'radial-gradient(circle, rgba(0,0,0,.4) 20%, transparent 20%)',
+          background: 'radial-gradient(circle, rgba(76, 201, 240, 0.7) 20%, transparent 20%)',
           cursor: 'pointer',
         };
       }
@@ -192,11 +192,13 @@ const Chessboard = ({
         animationDuration={200}
         boardWidth={450}
         customBoardStyle={{
-          borderRadius: '6px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+          borderRadius: '12px',
+          boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+          overflow: 'hidden',
+          border: '1px solid rgba(255, 255, 255, 0.1)'
         }}
-        customDarkSquareStyle={{ backgroundColor: '#4b7399' }}
-        customLightSquareStyle={{ backgroundColor: '#e0e0e0' }}
+        customDarkSquareStyle={{ backgroundColor: 'var(--dark-square)' }}
+        customLightSquareStyle={{ backgroundColor: 'var(--light-square)' }}
       />
     </div>
   );

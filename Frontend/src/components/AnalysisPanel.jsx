@@ -132,20 +132,20 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
-      <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
+    <div className="analysis-panel">
+      <div className="analysis-panel-header">ENIGMA Analysis</div>
       
-      <div className="evaluation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Evaluation</h4>
+      <div className="mb-6">
+        <h4 className="text-md font-medium text-gray-300 mb-2">Evaluation</h4>
         <div className="eval-display flex items-center">
-          <div className={`text-lg font-bold ${
+          <div className={`text-xl font-bold ${
             evaluation.includes('Mate') 
-              ? evaluation.includes('Mated') ? 'text-red-600' : 'text-green-600'
+              ? evaluation.includes('Mated') ? 'text-red-400' : 'text-green-400'
               : parseFloat(evaluation) > 0 
-                ? 'text-green-600' 
+                ? 'text-green-400' 
                 : parseFloat(evaluation) < 0 
-                  ? 'text-red-600' 
-                  : 'text-gray-800'
+                  ? 'text-red-400' 
+                  : 'text-gray-200'
           }`}>
             {evaluation.includes('Mate') 
               ? evaluation 
@@ -158,30 +158,30 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           </div>
           
           {isAnalyzing && (
-            <div className="ml-3 text-sm text-gray-600 flex items-center">
-              <div className="animate-spin h-4 w-4 border-2 border-green-500 rounded-full border-t-transparent mr-2"></div>
+            <div className="ml-3 text-sm text-gray-400 flex items-center">
+              <div className="animate-spin h-4 w-4 border-2 border-accent-color rounded-full border-t-transparent mr-2"></div>
               Analyzing...
             </div>
           )}
         </div>
         
-        {/* Visual evaluation bar (black and white like chess.com) */}
+        {/* Visual evaluation bar (horizontal for mobile design) */}
         {!evaluation.includes('Mate') && (
-          <div className="mt-2 h-4 w-full bg-gray-200 rounded overflow-hidden flex">
+          <div className="mt-2 h-3 w-full bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden flex">
             <div 
-              className="h-full bg-black" 
+              className="h-full bg-[var(--negative-eval)]" 
               style={{ 
                 width: `${50 - Math.min(Math.abs(parseFloat(evaluation)) * 8, 50)}%`
               }}
             ></div>
             <div 
-              className="h-full bg-white border-l border-r border-gray-400" 
+              className="h-full border-l border-r border-gray-700" 
               style={{ 
                 width: '0.5%'
               }}
             ></div>
             <div 
-              className="h-full bg-white" 
+              className="h-full bg-[var(--positive-eval)]" 
               style={{ 
                 width: `${Math.min(Math.abs(parseFloat(evaluation)) * 8, 50) + 49.5}%`,
               }}
@@ -190,26 +190,26 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         )}
       </div>
       
-      <div className="best-moves mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
+      <div className="mb-6">
+        <h4 className="text-md font-medium text-gray-300 mb-2">Suggested Moves</h4>
         {bestMoves.length > 0 ? (
-          <ul className="list-none p-0 border rounded-md divide-y shadow-sm">
+          <ul className="list-none p-0 border border-[rgba(255,255,255,0.1)] rounded-[var(--border-radius-md)] divide-y divide-[rgba(255,255,255,0.05)] shadow-md">
             {bestMoves.map((move, index) => (
               <li 
                 key={index} 
-                className="py-2 px-3 cursor-pointer hover:bg-gray-100 flex items-center"
+                className="py-2 px-3 cursor-pointer hover:bg-[rgba(255,255,255,0.05)] flex items-center"
                 onClick={() => onSelectMove && onSelectMove(move)}
               >
-                <div className="move-number mr-3 bg-green-100 text-green-800 px-2 py-1 rounded-md font-medium text-sm">
+                <div className="move-number mr-3 bg-[rgba(76,201,240,0.2)] text-[var(--accent-color)] px-2 py-1 rounded-md font-medium text-sm">
                   {index + 1}
                 </div>
                 <div className="flex-1">
-                  <div className="font-bold">{move.san || 'Unknown'}</div>
-                  <div className="text-xs text-gray-600">{move.uci}</div>
+                  <div className="font-bold text-gray-200">{move.san || 'Unknown'}</div>
+                  <div className="text-xs text-gray-400">{move.uci}</div>
                 </div>
                 <div className="ml-auto">
                   <button 
-                    className="text-sm bg-gray-800 hover:bg-gray-900 text-white px-2 py-1 rounded shadow-sm transition-all duration-200"
+                    className="enigma-button text-sm py-1 px-2"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectMove && onSelectMove(move);
@@ -222,17 +222,17 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
             ))}
           </ul>
         ) : isAnalyzing ? (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
-            <p className="text-gray-600">Analyzing position...</p>
+          <div className="p-6 bg-[rgba(255,255,255,0.05)] text-center rounded-[var(--border-radius-md)] shadow-md">
+            <div className="animate-spin h-8 w-8 border-2 border-accent-color rounded-full border-t-transparent mx-auto mb-3"></div>
+            <p className="text-gray-300">Analyzing position...</p>
           </div>
         ) : (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <p className="text-gray-600 italic">No suggested moves available</p>
+          <div className="p-6 bg-[rgba(255,255,255,0.05)] text-center rounded-[var(--border-radius-md)] shadow-md">
+            <p className="text-gray-400 italic">No suggested moves available</p>
             {!autoAnalyze && (
               <button
                 onClick={() => handleAnalyze(depth)}
-                className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
+                className="mt-4 enigma-button"
               >
                 Analyze Now
               </button>
@@ -241,55 +241,44 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         )}
       </div>
       
-      <div className="analysis-settings mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
-        <div className="flex flex-wrap gap-3 bg-gray-50 p-3 rounded-md shadow-sm">
+      <div className="mb-6">
+        <h4 className="text-md font-medium text-gray-300 mb-2">Analysis Settings</h4>
+        <div className="flex flex-wrap gap-3 bg-[rgba(255,255,255,0.05)] p-3 rounded-[var(--border-radius-md)] shadow-md">
           <div className="flex items-center">
             <input
               type="checkbox"
               id="autoAnalyze"
               checked={autoAnalyze}
               onChange={() => setAutoAnalyze(!autoAnalyze)}
-              className="mr-2 h-4 w-4"
+              className="mr-2 h-4 w-4 accent-[var(--accent-color)]"
             />
-            <label htmlFor="autoAnalyze" className="text-gray-800">Auto-analyze positions</label>
+            <label htmlFor="autoAnalyze" className="text-gray-300">Auto-analyze positions</label>
           </div>
           
           <div className="flex items-center ml-4">
-            <label htmlFor="depth" className="mr-2 text-gray-800">Depth:</label>
+            <label htmlFor="depth" className="mr-2 text-gray-300">Depth:</label>
             <select
               id="depth"
               value={depth}
               onChange={(e) => setDepth(Number(e.target.value))}
-              className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
+              className="py-1 px-2 rounded-md border border-[rgba(255,255,255,0.1)] bg-[var(--surface-color)] text-gray-300 focus:outline-none focus:ring-2 focus:ring-accent-color"
             >
               <option value="12">12 (Fast)</option>
               <option value="18">18 (Balanced)</option>
               <option value="22">22 (Strong)</option>
               <option value="26">26 (Deeper)</option>
-              <option value="32">32 (Maximum)</option>
             </select>
           </div>
-          
-          {!autoAnalyze && (
-            <button 
-              onClick={() => handleAnalyze(depth)} 
-              disabled={isAnalyzing || !fen}
-              className={`text-sm py-1 px-3 rounded-md shadow-sm transition-all duration-200 ${isAnalyzing || !fen ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 text-white'}`}
-            >
-              {isAnalyzing ? 'Analyzing...' : 'Analyze Now'}
-            </button>
-          )}
         </div>
       </div>
 
-      <div className="ai-explanation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
-        <div className="controls flex flex-wrap gap-3 mb-4">
+      <div className="mb-6">
+        <h4 className="text-md font-medium text-gray-300 mb-2">AI Coach Explanation</h4>
+        <div className="flex flex-wrap gap-3 mb-4">
           <select 
             value={playerLevel} 
             onChange={(e) => setPlayerLevel(e.target.value)}
-            className="py-2 px-4 rounded-md border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+            className="py-2 px-4 rounded-[var(--border-radius-sm)] border border-[rgba(255,255,255,0.1)] bg-[var(--surface-color)] text-gray-300 focus:outline-none focus:ring-2 focus:ring-accent-color"
           >
             <option value="beginner">Beginner</option>
             <option value="intermediate">Intermediate</option>
@@ -299,22 +288,24 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           <button 
             onClick={handleGetExplanation} 
             disabled={isLoading || !fen || bestMoves.length === 0}
-            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
-              ${isLoading || !fen || bestMoves.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
+            className={`enigma-button py-2 px-4 ${isLoading || !fen || bestMoves.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {isLoading ? 'Loading explanation...' : 'Get AI Explanation'}
           </button>
         </div>
         
         {error && (
-          <div className="text-red-600 bg-red-50 py-2 px-4 rounded-md mb-4">
+          <div className="text-red-400 bg-[rgba(239,68,68,0.1)] py-2 px-4 rounded-md mb-4">
             {error}
           </div>
         )}
         
-        <div className="explanation-content p-4 bg-gray-50 rounded-md shadow-sm text-gray-800 whitespace-pre-line">
+        <div className="p-4 bg-[rgba(255,255,255,0.05)] rounded-[var(--border-radius-md)] shadow-md text-gray-300 whitespace-pre-line min-h-[120px]">
           {isLoading ? (
-            <p className="text-gray-600 italic">Getting AI explanation...</p>
+            <div className="flex items-center justify-center h-24">
+              <div className="animate-spin h-5 w-5 border-2 border-accent-color rounded-full border-t-transparent mr-3"></div>
+              <p>Getting AI explanation...</p>
+            </div>
           ) : explanation ? (
             <div>
               <p>{explanation}</p>
@@ -325,20 +316,9 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
               )}
             </div>
           ) : (
-            <p className="text-gray-600">First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
+            <p className="text-gray-400 text-center">First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
           )}
         </div>
-      </div>
-      
-      <div className="voice-controls">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Voice Commands</h4>
-        <p className="text-gray-600 mb-2">Voice controls will be implemented in milestone 3</p>
-        <button 
-          disabled 
-          className="bg-gray-300 text-gray-500 py-2 px-4 rounded-md cursor-not-allowed shadow-sm"
-        >
-          Start Listening
-        </button>
       </div>
     </div>
   );
