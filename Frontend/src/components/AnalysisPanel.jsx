@@ -418,47 +418,6 @@ const AnalysisPanel = ({
           )}
         </div>
       </div>
-<div className="flex justify-between items-center mb-4">
-  <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
-  <div className="flex items-center gap-2">
-    <div className="flex items-center mr-2">
-      <input
-        type="checkbox"
-        id="autoSpeakChat"
-        checked={autoSpeak}
-        onChange={() => setAutoSpeak(!autoSpeak)}
-        className="mr-1 h-4 w-4"
-      />
-      <label htmlFor="autoSpeakChat" className="text-sm text-gray-600">Auto-speak</label>
-    </div>
-    <button
-      onClick={() => {
-        const lastMessage = getLastAssistantMessage();
-        if (lastMessage) handleSpeak(lastMessage);
-      }}
-      disabled={!getLastAssistantMessage() || isLoading || isSpeaking}
-      className={`flex items-center p-1.5 rounded-md text-white text-sm ${
-        !getLastAssistantMessage() || isLoading
-          ? 'bg-gray-300 cursor-not-allowed'
-          : isSpeaking
-            ? 'bg-red-500'
-            : 'bg-gray-700 hover:bg-gray-800'
-      }`}
-      title={isSpeaking ? "Stop speaking" : "Speak last response"}
-    >
-      {isSpeaking ? (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-        </svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728"></path>
-        </svg>
-      )}
-    </button>
-  </div>
-</div>
     </div>
   );
 };
