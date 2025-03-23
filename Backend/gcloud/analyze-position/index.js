@@ -23,15 +23,30 @@ exports.analyzeChessPosition = async (req, res) => {
       location: 'us-central1',
     });
 
-    const generativeModel = vertex.preview.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      generationConfig: {
-        maxOutputTokens: 800,
-        temperature: 0.1,
-        topP: 0.8,
-        topK: 40,
-      }
-    });
+    // Use more precise configuration for chat responses
+    const modelConfig = userQuestion 
+      ? {
+          // For direct questions, use settings optimized for concise, precise answers
+          model: 'gemini-2.0-flash', // Fast model for quick responses
+          generationConfig: {
+            maxOutputTokens: 300, // Shorter responses
+            temperature: 0.2,     // Slightly more creative but still focused
+            topP: 0.95,           // Higher topP for more focused responses
+            topK: 20,             // Lower topK for more deterministic outputs
+          }
+        }
+      : {
+          // For general analysis, use default settings
+          model: 'gemini-2.0-flash',
+          generationConfig: {
+            maxOutputTokens: 800,
+            temperature: 0.1,
+            topP: 0.8,
+            topK: 40,
+          }
+        };
+    
+    const generativeModel = vertex.preview.getGenerativeModel(modelConfig);
 
     const { 
       fen, 
@@ -40,7 +55,8 @@ exports.analyzeChessPosition = async (req, res) => {
       playerLevel, 
       isCheckmate, 
       checkmateWinner,
-      isGameReport
+      isGameReport,
+      userQuestion
      } = req.body || {};
     
     if (!fen) {
@@ -55,7 +71,8 @@ exports.analyzeChessPosition = async (req, res) => {
       evaluation: evaluation || 'Not provided',
       moves: bestMoves ? `${bestMoves.length} moves` : 'None',
       isCheckmate: isCheckmate || false,
-      isGameReport: isGameReport || false
+      isGameReport: isGameReport || false,
+      userQuestion: userQuestion || null
     });
 
     // Detect game phase first
@@ -63,10 +80,15 @@ exports.analyzeChessPosition = async (req, res) => {
     console.log(`Detected game phase: ${gamePhase}`);
 
     let prompt;
-    if (isGameReport){
+    // If user has asked a specific question, use the chat prompt
+    if (userQuestion) {
+      prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase);
+    }
+    // Otherwise, use the standard prompts
+    else if (isGameReport) {
       prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner);
     }
-    else if (isCheckmate){
+    else if (isCheckmate) {
       prompt = createCheckmatePrompt(fen, checkmateWinner, validatedLevel);
     } else {
       switch (gamePhase) {
@@ -244,6 +266,46 @@ function createCheckmatePrompt(fen, winner, playerLevel) {
   
   Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
   ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+  `;
+}
+
+function createChatPrompt(fen, evaluation, bestMoves, playerLevel, userQuestion, gamePhase) {
+  const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+  
+  return `
+  You are ChessCoach, a concise chess assistant for a ${playerLevel} level player.
+  
+  Chess Position: ${fen}
+  Engine Evaluation: ${evaluation || 'Not available'}
+  Best Moves: ${formatBestMoves(bestMoves)}
+  Game Phase: ${gamePhase || 'unknown'}
+  
+  ## User Question
+  "${userQuestion}"
+  
+  ## Response Guidelines
+  1. Focus EXCLUSIVELY on answering the specific question asked - do not provide general position analysis unless requested
+  2. Be extremely concise - limit your response to 3-5 sentences maximum
+  3. For move-specific questions, directly address the strength or weakness of the move
+  4. For position questions, focus only on the most critical elements relevant to the question
+  5. Skip pleasantries and unnecessary explanations
+  
+  ## Response Format
+  - Start directly with your answer - no introductions like "Sure, I'd be happy to..."
+  - Use bullet points for multiple points
+  - For move evaluations, start with a clear judgment (e.g., "e4 is strong because...")
+  
+  ## Expertise Level
+  ${playerLevel === 'beginner' ? 
+    'Use simple language. Focus on basic threats, material, and piece activity.' : 
+    playerLevel === 'intermediate' ? 
+    'Use moderate chess terminology. Include tactical patterns and positional considerations.' :
+    'Use advanced chess concepts and precise evaluations.'}
+  
+  Appropriate terms for this level: ${config.terms.slice(0, 10).join(', ')}${config.terms.length > 10 ? '...' : ''}.
+  ${config.avoidTerms.length > 0 ? `Avoid these concepts unless specifically asked: ${config.avoidTerms.slice(0, 5).join(', ')}${config.avoidTerms.length > 5 ? '...' : ''}.` : ''}
+  
+  Be precise and direct. Imagine you're speaking briefly during a timed chess game.
   `;
 }
 

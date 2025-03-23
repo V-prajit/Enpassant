@@ -157,12 +157,15 @@ const fetchWithTimeout = async (url, options, timeout = API_TIMEOUT) => {
   }
 };
 
-export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner', isGameReport = false) => {
+export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner', isGameReport = false, isCheckmate = false, userQuestion = null) => {
   try {
     console.log(`Getting explanation for ${playerLevel} level...`);
     const startTime = performance.now();
     
-    const isCheckmate = evaluation.includes('Checkmate') || (bestMoves.length > 0 && bestMoves[0].isCheckmate);
+    // Check for checkmate if not already specified
+    if (!isCheckmate) {
+      isCheckmate = evaluation.includes('Checkmate') || (bestMoves.length > 0 && bestMoves[0]?.isCheckmate);
+    }
     const gameReportRequested = isGameReport || isCheckmate;
 
     let checkmateWinner = null;
@@ -175,7 +178,7 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
           } else {
             checkmateWinner = "Unknown"; // Fallback if format is unexpected
           }
-        } else if (bestMoves.length > 0 && bestMoves[0].winner) {
+        } else if (bestMoves.length > 0 && bestMoves[0]?.winner) {
           // Get winner from bestMoves
           checkmateWinner = bestMoves[0].winner;
         } else {
@@ -183,21 +186,28 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
         }
       }
 
+    const requestBody = {
+      fen,
+      evaluation,
+      bestMoves,
+      playerLevel,
+      isCheckmate: isCheckmate,
+      isGameReport: gameReportRequested,
+      checkmateWinner: checkmateWinner
+    };
+    
+    // Add user question to the request if provided
+    if (userQuestion) {
+      requestBody.userQuestion = userQuestion;
+    }
+
     const requestData = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({
-        fen,
-        evaluation,
-        bestMoves,
-        playerLevel,
-        isCheckmate: isCheckmate,
-        isGameReport: gameReportRequested,
-        checkmateWinner: checkmateWinner
-      })
+      body: JSON.stringify(requestBody)
     };
     
     const fixedUrl = STOCKFISH_URL.replace('analyzeWithStockfish', 'analyzeChessPosition');
@@ -224,3 +234,4 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
 export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   return getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
 };
+

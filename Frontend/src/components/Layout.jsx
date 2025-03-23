@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Chessboard from './Chessboard';
 import MoveHistory from './MoveHistory';
 import AnalysisPanel from './AnalysisPanel';
+import ChatInterface from './ChatInterface';
 import useChessGame from '../hooks/useChessGame';
 
 const Layout = () => {
@@ -18,6 +19,9 @@ const Layout = () => {
   } = useChessGame();
 
   const [boardOrientation, setBoardOrientation] = useState('white');
+  const [evaluation, setEvaluation] = useState('0.0');
+  const [bestMoves, setBestMoves] = useState([]);
+  const [playerLevel, setPlayerLevel] = useState('beginner');
 
   const handleSelectMove = (move) => {
     if (move && move.uci) {
@@ -107,7 +111,22 @@ const Layout = () => {
         
         <div className="flex-1 min-w-[300px] bg-white rounded-md shadow-sm p-4">
           <MoveHistory history={history} onMoveClick={handleMoveClick} />
-          <AnalysisPanel fen={fen} onSelectMove={handleSelectMove} />
+          <div className="flex flex-col gap-5">
+            <AnalysisPanel 
+              fen={fen} 
+              onSelectMove={handleSelectMove} 
+              onEvaluationChange={setEvaluation}
+              onBestMovesChange={setBestMoves}
+              onPlayerLevelChange={setPlayerLevel}
+              playerLevel={playerLevel}
+            />
+            <ChatInterface 
+              fen={fen} 
+              evaluation={evaluation} 
+              bestMoves={bestMoves} 
+              playerLevel={playerLevel} 
+            />
+          </div>
         </div>
       </div>
     </div>

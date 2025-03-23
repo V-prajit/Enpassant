@@ -2,16 +2,45 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
 import { Chess } from 'chess.js';
 
-const AnalysisPanel = ({ fen, onSelectMove }) => {
+const AnalysisPanel = ({ 
+  fen, 
+  onSelectMove, 
+  onEvaluationChange,
+  onBestMovesChange,
+  onPlayerLevelChange,
+  playerLevel: initialPlayerLevel = 'beginner'
+}) => {
   const [evaluation, setEvaluation] = useState('0.0');
   const [bestMoves, setBestMoves] = useState([]);
   const [explanation, setExplanation] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [playerLevel, setPlayerLevel] = useState('beginner');
+  const [playerLevel, setPlayerLevel] = useState(initialPlayerLevel);
   const [error, setError] = useState(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [depth, setDepth] = useState(22);
+  
+  // Effect to update parent component with changes to evaluation
+  useEffect(() => {
+    if (onEvaluationChange) {
+      onEvaluationChange(evaluation);
+    }
+  }, [evaluation, onEvaluationChange]);
+  
+  // Effect to update parent component with changes to bestMoves
+  useEffect(() => {
+    if (onBestMovesChange) {
+      onBestMovesChange(bestMoves);
+    }
+  }, [bestMoves, onBestMovesChange]);
+  
+  // Handle player level changes
+  const handlePlayerLevelChange = (level) => {
+    setPlayerLevel(level);
+    if (onPlayerLevelChange) {
+      onPlayerLevelChange(level);
+    }
+  };
   
   // Use refs to track the latest state for use in effect dependencies
   const lastAnalyzedFen = useRef('');
@@ -297,7 +326,7 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
         <div className="controls flex flex-wrap gap-3 mb-4">
           <select 
             value={playerLevel} 
-            onChange={(e) => setPlayerLevel(e.target.value)}
+            onChange={(e) => handlePlayerLevelChange(e.target.value)}
             className="py-2 px-4 rounded-md border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
           >
             <option value="beginner">Beginner</option>
