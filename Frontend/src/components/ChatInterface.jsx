@@ -269,7 +269,7 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
     if (messages.length === 0) {
       setMessages([{
         role: 'assistant',
-        content: `Welcome to Chess Coach Chat! You can ask me any questions about chess or the current position. Try asking:
+        content: `Welcome to Enpassant! You can ask me any questions about chess or the current position. Try asking:
         
 • "Why is this move the best?"
 • "What should I focus on in this position?"
@@ -413,7 +413,7 @@ You can type or use the microphone button to speak your question. For chess nota
   return (
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
+        <h3 className="text-xl font-semibold text-gray-900">Enpassant 1.0</h3>
       </div>
       
       {/* Messages container */}
