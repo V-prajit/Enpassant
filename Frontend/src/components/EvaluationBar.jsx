@@ -40,7 +40,7 @@ const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
   }
   
   return (
-    <div className="evaluation-bar-container h-[450px] w-8 mr-3 flex flex-col relative rounded-md overflow-hidden shadow-md">
+    <div className="evaluation-bar-container h-[450px] w-6 mr-3 flex flex-col relative rounded-md overflow-hidden shadow-md">
       {/* Black side (top) */}
       <div 
         className="bg-black"
