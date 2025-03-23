@@ -1,6 +1,13 @@
 // Backend/gcloud/analyze-position/index.js
 const { VertexAI } = require('@google-cloud/vertexai');
-const { createSkillLevelPrompt } = require('./player-levels');
+const { 
+  createSkillLevelPrompt, 
+  createTacticalPrompt, 
+  createOpeningPrompt, 
+  createEndgamePrompt, 
+  createMiddlegamePrompt,
+  determineGamePhase 
+} = require('./player-levels');
 const { createPositionDescription } = require('./position-analyzer');
 
 exports.analyzeChessPosition = async (req, res) => {
