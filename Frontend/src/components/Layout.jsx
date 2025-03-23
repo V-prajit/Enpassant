@@ -1,3 +1,4 @@
+// Layout.jsx
 import React, { useState } from 'react';
 import Chessboard from './Chessboard';
 import MoveHistory from './MoveHistory';
@@ -5,6 +6,8 @@ import AnalysisPanel from './AnalysisPanel';
 import ChatInterface from './ChatInterface';
 import EvaluationBar from './EvaluationBar';
 import useChessGame from '../hooks/useChessGame';
+import { PlusCircle, RotateCcw, RefreshCw, Edit } from 'lucide-react';
+import FenModal from './FenModal';
 
 const Layout = () => {
   const { 
@@ -23,6 +26,8 @@ const Layout = () => {
   const [evaluation, setEvaluation] = useState('0.0');
   const [bestMoves, setBestMoves] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showFenInput, setShowFenInput] = useState(false);
+  const [fenInput, setFenInput] = useState('');
 
   const handleSelectMove = (move) => {
     if (move && move.uci) {
@@ -41,12 +46,19 @@ const Layout = () => {
     setBoardOrientation(prev => prev === 'white' ? 'black' : 'white');
   };
 
+  const handleSetFen = () => {
+    if (fenInput.trim() !== '') {
+      initGame(fenInput);
+      setFenInput('');
+      setShowFenInput(false);
+    }
+  };
+
   return (
-    <div className="max-w-[1400px] mx-auto p-5 bg-gray-100 rounded-md shadow-md">
+    <div className="max-w-[1400px] mx-auto p-5 bg-gray-100 rounded-md shadow-md relative">
       <h1 className="text-5xl font-extrabold tracking-tight text-gray-800 border-b-2 border-gray-300 pb-2 mb-6">
         Enpassant
       </h1>
-
 
       <div className="mb-2">
         <span className="font-bold text-gray-700">Current turn:</span> {turn === 'w' ? 'White' : 'Black'}
@@ -54,7 +66,7 @@ const Layout = () => {
       
       <div className="flex flex-wrap gap-5">
         <div className="flex-1 min-w-[400px]">
-          <div className="flex items-start">
+          <div className="flex items-start space-x-3">
             {/* Vertical evaluation bar */}
             <EvaluationBar 
               evaluation={evaluation} 
@@ -73,28 +85,32 @@ const Layout = () => {
           
           <div className="mt-4 flex flex-wrap gap-3">
             <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
               onClick={() => initGame()}
             >
+              <PlusCircle size={16} />
               New Game
             </button>
             <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
               onClick={undoMove}
             >
+              <RotateCcw size={16} />
               Undo Move
             </button>
             <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
               onClick={toggleOrientation}
             >
+              <RefreshCw size={16} />
               Flip Board
             </button>
             <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
-              onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}
+              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
+              onClick={() => setShowFenInput(true)}
             >
-              Load Position
+              <Edit size={16} />
+              Set FEN
             </button>
           </div>
         </div>
@@ -117,6 +133,18 @@ const Layout = () => {
           </div>
         </div>
       </div>
+
+      {/* Render the separate FEN modal component */}
+      <FenModal 
+        show={showFenInput}
+        fenInput={fenInput}
+        setFenInput={setFenInput}
+        handleSetFen={handleSetFen}
+        handleCancel={() => {
+          setFenInput('');
+          setShowFenInput(false);
+        }}
+      />
     </div>
   );
 };
