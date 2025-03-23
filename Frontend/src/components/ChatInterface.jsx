@@ -471,7 +471,38 @@ You can type or use the microphone button to speak your question. For chess nota
                   </div>
                 ) : (
                   <div>
-                    <p className="text-gray-800">{msg.content}</p>
+                    <div className="text-gray-800">
+                      {msg.content.split(/\n/).map((line, lineIndex) => {
+                        // Check if the line starts with a single asterisk for bullet points
+                        if (line.trim().startsWith('* ')) {
+                          return (
+                            <div key={lineIndex} className="flex items-start mb-1">
+                              <span className="mr-2 mt-1">•</span>
+                              <span>
+                                {line.trim().substring(2).split(/(\*\*[^*]+\*\*)/).map((part, i) => {
+                                  if (part.startsWith('**') && part.endsWith('**')) {
+                                    return <strong key={i}>{part.slice(2, -2)}</strong>;
+                                  }
+                                  return part;
+                                })}
+                              </span>
+                            </div>
+                          );
+                        }
+                        
+                        // Handle regular lines with possible bold text
+                        return (
+                          <p key={lineIndex} className={lineIndex > 0 ? "mt-2" : ""}>
+                            {line.split(/(\*\*[^*]+\*\*)/).map((part, i) => {
+                              if (part.startsWith('**') && part.endsWith('**')) {
+                                return <strong key={i}>{part.slice(2, -2)}</strong>;
+                              }
+                              return part;
+                            })}
+                          </p>
+                        );
+                      })}
+                    </div>
                     {msg.responseTime && (
                       <p className="text-xs text-gray-500 mt-1 text-right">
                         {typeof msg.responseTime === 'number' 

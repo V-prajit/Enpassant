@@ -78,6 +78,17 @@ export const speakText = (text, options = {}) => {
 export const prepareAnalysisForSpeech = (analysis) => {
   if (!analysis) return "";
 
+  // Handle formatting in text (emphasis and bullet points)
+  const handleFormatting = (text) => {
+    // Replace ** with pauses and emphasis
+    let processed = text.replace(/\*\*([^*]+)\*\*/g, ", $1, ");
+    
+    // Handle bullet points (lines starting with *)
+    processed = processed.replace(/^\s*\*\s+/gm, ". Bullet point: ");
+    
+    return processed;
+  };
+
   // Replace chess notation with more speakable text
   let processedText = analysis
     // Make the evaluation more natural to hear
@@ -124,7 +135,8 @@ export const prepareAnalysisForSpeech = (analysis) => {
     // Special case for e.p. (en passant)
     .replace(/e\.p\./g, "en passant");
 
-  return processedText;
+  // Process formatting after other replacements
+  return handleFormatting(processedText);
 };
 
 /**
