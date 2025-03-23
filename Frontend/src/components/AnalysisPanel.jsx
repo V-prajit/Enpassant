@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
 import { Chess } from 'chess.js';
+import { speakText, prepareAnalysisForSpeech, stopSpeech } from '../utils/speechSynthesis';
 
 const AnalysisPanel = ({ 
   fen, 
@@ -21,6 +22,9 @@ const AnalysisPanel = ({
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [depth, setDepth] = useState(22);
   const [modelInfo, setModelInfo] = useState(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechRate, setSpeechRate] = useState(1.0);
+  const [autoSpeak, setAutoSpeak] = useState(false);
   
   // Effect to update parent component with changes to evaluation
   useEffect(() => {
@@ -42,6 +46,14 @@ const AnalysisPanel = ({
       onAnalyzingChange(isAnalyzing);
     }
   }, [isAnalyzing, onAnalyzingChange]);
+  
+  // Cleanup speech synthesis when component unmounts
+  useEffect(() => {
+    return () => {
+      // Cancel any ongoing speech when component unmounts
+      stopSpeech();
+    };
+  }, []);
   
   // Player level is always 'advanced' now - this function is maintained 
   // for compatibility with parent components but doesn't change anything
@@ -203,6 +215,11 @@ const AnalysisPanel = ({
         }
         
         console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
+        
+        // Automatically speak the explanation if autoSpeak is enabled
+        if (autoSpeak) {
+          handleSpeak(result.explanation);
+        }
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
@@ -219,6 +236,58 @@ const AnalysisPanel = ({
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Handle speaking the analysis out loud
+  const handleSpeak = async (textToSpeak = explanation) => {
+    if (!textToSpeak) return;
+    
+    try {
+      // Stop any ongoing speech
+      if (isSpeaking) {
+        stopSpeech();
+        setIsSpeaking(false);
+        return;
+      }
+      
+      // Process the text for better speech output
+      const processedText = prepareAnalysisForSpeech(textToSpeak);
+      
+      setIsSpeaking(true);
+      
+      await speakText(processedText, {
+        rate: speechRate,
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: (error) => {
+          console.error("Speech synthesis error:", error);
+          setIsSpeaking(false);
+          setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
+        }
+      });
+    } catch (error) {
+      console.error("Failed to speak analysis:", error);
+      setIsSpeaking(false);
+      setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
+    }
+  };
+  
+  // Handle speaking evaluation and best moves
+  const handleSpeakEvaluation = () => {
+    if (!bestMoves || bestMoves.length === 0) return;
+    
+    // Prepare a spoken version of the evaluation and best moves
+    let evalSpeech = `The position evaluation is ${evaluation}. `;
+    
+    if (bestMoves && bestMoves.length > 0) {
+      evalSpeech += `The best move is ${bestMoves[0].san || bestMoves[0].uci}. `;
+      
+      if (bestMoves.length > 1) {
+        evalSpeech += `Alternative moves include ${bestMoves.slice(1, 3).map(move => move.san || move.uci).join(' and ')}.`;
+      }
+    }
+    
+    handleSpeak(evalSpeech);
   };
 
   return (
@@ -427,14 +496,84 @@ const AnalysisPanel = ({
       </div>
       
       <div className="voice-controls">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Voice Commands</h4>
-        <p className="text-gray-600 mb-2">Voice controls will be implemented in milestone 3</p>
-        <button 
-          disabled 
-          className="bg-gray-300 text-gray-500 py-2 px-4 rounded-md cursor-not-allowed shadow-sm"
-        >
-          Start Listening
-        </button>
+        <h4 className="text-md font-medium text-gray-700 mb-2">Voice Output</h4>
+        <div className="bg-gray-50 p-3 rounded-md shadow-sm mb-4">
+          <div className="flex flex-wrap gap-4 mb-3">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="autoSpeak"
+                checked={autoSpeak}
+                onChange={() => setAutoSpeak(!autoSpeak)}
+                className="mr-2 h-4 w-4"
+              />
+              <label htmlFor="autoSpeak" className="text-gray-800">Auto-speak analysis</label>
+            </div>
+            
+            <div className="flex items-center">
+              <label htmlFor="speechRate" className="mr-2 text-gray-800">Speech Rate:</label>
+              <select
+                id="speechRate"
+                value={speechRate}
+                onChange={(e) => setSpeechRate(Number(e.target.value))}
+                className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
+              >
+                <option value="1.0">1x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2.0">2x</option>
+                <option value="2.5">2.5x</option>
+                <option value="3.0">3x</option>
+              </select>
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <button 
+              onClick={() => handleSpeak()}
+              disabled={!explanation || isLoading}
+              className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
+                !explanation || isLoading 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : isSpeaking
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-gray-700 hover:bg-gray-800'
+              }`}
+            >
+              {isSpeaking ? (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                  </svg>
+                  Stop Speaking
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728">
+                    </path>
+                  </svg>
+                  Speak Analysis
+                </>
+              )}
+            </button>
+            
+            <button 
+              onClick={handleSpeakEvaluation}
+              disabled={!bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing}
+              className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
+                !bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3"></path>
+              </svg>
+              Speak Evaluation
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

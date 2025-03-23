@@ -1,4 +1,8 @@
 const { VertexAI } = require('@google-cloud/vertexai');
+const Busboy = require('busboy');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
 const {
   playerLevelConfig,
@@ -252,3 +256,178 @@ exports.analyzeChessPosition = async (req, res) => {
 // createChatPrompt is now imported from player-levels.js
 
 // createGameReportPrompt is now imported from player-levels.js
+
+/**
+ * Cloud Function to transcribe audio with Gemini API and incorporate chess context
+ * 
+ * @param {Object} req - HTTP request object
+ * @param {Object} res - HTTP response object
+ */
+exports.transcribeAudioWithGemini = async (req, res) => {
+  // Set CORS headers for preflight requests
+  res.set('Access-Control-Allow-Origin', '*');
+  
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET, POST');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+    return res.status(204).send('');
+  }
+  
+  // Log request source
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  console.log(`Handling audio transcription request from: ${userAgent}`);
+  
+  try {
+    // Process multipart form data (audio file)
+    const { audioFilePath, fields } = await parseFormData(req);
+    
+    if (!audioFilePath) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+    
+    console.log(`Audio file received: ${audioFilePath}`);
+    
+    // Get chess context if available
+    const fen = fields.fen || null;
+    const isChessContext = fields.context === 'chess';
+    
+    // Initialize Vertex AI
+    const vertex = new VertexAI({
+      project: process.env.GOOGLE_CLOUD_PROJECT || 'tidal-hack25tex-223',
+      location: 'us-central1',
+    });
+    
+    // Use Gemini 2.0 Pro (optimized for audio transcription)
+    const generativeModel = vertex.preview.getGenerativeModel({
+      model: 'gemini-2.0-pro',
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.8,
+        topK: 40,
+        maxOutputTokens: 300,
+      }
+    });
+    
+    // Read the audio file
+    const audioContent = fs.readFileSync(audioFilePath);
+    
+    // Check if file is empty
+    if (audioContent.length === 0) {
+      console.error('Received empty audio file');
+      return res.status(400).json({ error: 'Empty audio file provided' });
+    }
+    
+    console.log(`Audio file size: ${audioContent.length} bytes`);
+    const audioBase64 = audioContent.toString('base64');
+    
+    // Create prompt parts
+    const promptParts = [
+      { text: "Transcribe the following audio, focusing specifically on chess-related terminology and notation. Pay special attention to:" },
+      { text: "- Chess piece names (pawn, knight, bishop, rook, queen, king)" },
+      { text: "- Chess coordinates (a1, e4, etc.)" },
+      { text: "- Chess moves (e4, Nf3, O-O, etc.)" },
+      { text: "- Positional terms (center, attack, defense, etc.)" },
+      { text: "- Questions about chess positions or moves" },
+      { text: "Provide only the clean transcription without any explanations. If no speech is detected, just reply with 'No audible speech detected.'" },
+    ];
+    
+    // Add FEN context if available
+    if (fen && isChessContext) {
+      promptParts.push({
+        text: `Current chess position (FEN): ${fen}\nThis is a chess position the user is referring to.`
+      });
+    }
+    
+    // Add audio data
+    promptParts.push({
+      fileData: {
+        mimeType: 'audio/webm',
+        fileUri: `data:audio/webm;base64,${audioBase64}`
+      }
+    });
+    
+    console.log('Requesting audio transcription from Gemini...');
+    const startTime = Date.now();
+    
+    // Generate transcription
+    const result = await generativeModel.generateContent({
+      contents: [{ role: 'user', parts: promptParts }],
+    });
+    
+    const responseTime = (Date.now() - startTime) / 1000;
+    console.log(`Gemini response received in ${responseTime.toFixed(2)} seconds`);
+    
+    // Extract text from the response
+    const transcription = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || 
+                        'Sorry, I could not transcribe this audio.';
+    
+    console.log(`Transcribed: "${transcription}"`);
+    
+    // Clean up the temporary file
+    fs.unlinkSync(audioFilePath);
+    
+    // Return the transcription
+    return res.status(200).json({
+      transcription: transcription,
+      responseTime: responseTime,
+      hasChessContext: !!fen
+    });
+  } catch (error) {
+    console.error('Error processing audio:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Parses multipart form data from the request
+ * @param {Object} req - HTTP request object
+ * @returns {Promise<Object>} Object containing file path and form fields
+ */
+function parseFormData(req) {
+  return new Promise((resolve, reject) => {
+    const fields = {};
+    let audioFilePath = null;
+    
+    const busboy = Busboy({ headers: req.headers });
+    
+    busboy.on('file', (fieldname, file, { filename, mimeType }) => {
+      if (fieldname === 'audio') {
+        const tmpdir = os.tmpdir();
+        const filepath = path.join(tmpdir, filename);
+        
+        console.log(`Processing file upload: ${filename} (${mimeType})`);
+        
+        const writeStream = fs.createWriteStream(filepath);
+        file.pipe(writeStream);
+        
+        writeStream.on('finish', () => {
+          audioFilePath = filepath;
+        });
+      } else {
+        // Discard other file uploads
+        file.resume();
+      }
+    });
+    
+    busboy.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
+    
+    busboy.on('finish', () => {
+      resolve({ audioFilePath, fields });
+    });
+    
+    busboy.on('error', (error) => {
+      reject(error);
+    });
+    
+    if (req.rawBody) {
+      // For Cloud Functions environment
+      busboy.end(req.rawBody);
+    } else {
+      // For standard HTTP environment
+      req.pipe(busboy);
+    }
+  });
+}

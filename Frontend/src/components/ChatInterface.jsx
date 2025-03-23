@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { getGeminiExplanation } from '../services/api';
+import { getGeminiExplanation, sendAudioToGemini, GEMINI_AUDIO_URL } from '../services/api';
+import { speakText, prepareAnalysisForSpeech, stopSpeech } from '../utils/speechSynthesis';
 
 const ChatInterface = ({ fen, evaluation, bestMoves }) => {
   // Always use advanced level
@@ -12,8 +13,19 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
 
-  // State for speech recognition status
+  // State for speech status
   const [recognitionStatus, setRecognitionStatus] = useState('');
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const isRecordingAudioRef = useRef(false);
+
+  // State for speech synthesis
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(false);
+  
+  // Media recording refs
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
   
   // Function to initialize a new speech recognition instance
   const initializeSpeechRecognition = useCallback(() => {
@@ -47,39 +59,68 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
       // Convert spoken chess notation to standard notation
       // Maps for common speech recognition errors in chess context
       const fileCorrections = {
-        'ay': 'a', 'a': 'a', 
-        'bee': 'b', 'be': 'b', 'b': 'b',
-        'see': 'c', 'sea': 'c', 'c': 'c',
-        'dee': 'd', 'de': 'd', 'd': 'd',
-        'e': 'e', 'ee': 'e',
-        'f': 'f', 'ef': 'f',
-        'gee': 'g', 'g': 'g', 'ji': 'g',
-        'aitch': 'h', 'h': 'h'
+        'ay': 'a', 'a': 'a', 'hey': 'a', 'play': 'a',
+        'bee': 'b', 'be': 'b', 'b': 'b', 'beat': 'b', 'bean': 'b',
+        'see': 'c', 'sea': 'c', 'c': 'c', 'seize': 'c',
+        'dee': 'd', 'de': 'd', 'd': 'd', 'deep': 'd',
+        'e': 'e', 'ee': 'e', 'eat': 'e', 'each': 'e',
+        'f': 'f', 'ef': 'f', 'eff': 'f',
+        'gee': 'g', 'g': 'g', 'ji': 'g', 'gene': 'g', 'jeep': 'g',
+        'aitch': 'h', 'h': 'h', 'age': 'h', 'ach': 'h'
       };
       
       const rankCorrections = {
-        'one': '1', '1': '1',
-        'two': '2', 'to': '2', '2': '2', 'too': '2',
-        'three': '3', '3': '3', 'tree': '3',
-        'four': '4', 'for': '4', '4': '4',
-        'five': '5', '5': '5',
-        'six': '6', '6': '6',
-        'seven': '7', '7': '7',
-        'eight': '8', '8': '8', 'ate': '8'
+        'one': '1', '1': '1', 'won': '1', 'fun': '1',
+        'two': '2', 'to': '2', '2': '2', 'too': '2', 'do': '2', 'due': '2',
+        'three': '3', '3': '3', 'tree': '3', 'free': '3',
+        'four': '4', 'for': '4', '4': '4', 'fore': '4',
+        'five': '5', '5': '5', 'hive': '5',
+        'six': '6', '6': '6', 'sicks': '6',
+        'seven': '7', '7': '7', 'heaven': '7',
+        'eight': '8', '8': '8', 'ate': '8', 'hate': '8'
       };
       
       // Convert words like "Knight to e4" to "Ne4"
       const pieceCorrections = {
-        'knight': 'N', 'night': 'N', 'net': 'N',
-        'bishop': 'B',
-        'rook': 'R', 'ruck': 'R', 'rock': 'R',
-        'queen': 'Q',
-        'king': 'K',
-        'pawn': ''
+        'knight': 'N', 'night': 'N', 'net': 'N', 'mate': 'N', 'neat': 'N', 'knit': 'N',
+        'bishop': 'B', 'shop': 'B', 'be shop': 'B',
+        'rook': 'R', 'ruck': 'R', 'rock': 'R', 'brook': 'R', 'rookie': 'R',
+        'queen': 'Q', 'ween': 'Q', 'clean': 'Q', 'cream': 'Q',
+        'king': 'K', 'keen': 'K', 'kim': 'K',
+        'pawn': '', 'pond': '', 'prawns': '', 'ponds': '', 'prawn': '', 'porn': '', 'bon': '', 'pan': ''
       };
       
-      // Process text word by word
-      let processed = text.toLowerCase().split(' ').map(word => {
+      // Common chess words and questions
+      const chessTermCorrections = {
+        'center': 'center', 'centre': 'center', 'central': 'center', 'square': 'square',
+        'diagonal': 'diagonal', 'diagonally': 'diagonal',
+        'control': 'control', 'controls': 'control', 'controlling': 'control',
+        'developing': 'development', 'develop': 'development',
+        'attacking': 'attack', 'attack': 'attack',
+        'defending': 'defense', 'defense': 'defense', 'defend': 'defense',
+        'castling': 'castling', 'castle': 'castling',
+        'material': 'material',
+        'position': 'position', 'positioning': 'position',
+        'evaluation': 'evaluation', 'evaluate': 'evaluation', 'eval': 'evaluation'
+      };
+      
+      // First, preprocess some common transcription errors
+      let processedText = text.toLowerCase()
+        // Fix common number transcription errors
+        .replace(/\b2\b/g, 'to')
+        .replace(/\b4\b/g, 'for')
+        // Fix common piece name transcription errors
+        .replace(/pond/g, 'pawn')
+        .replace(/bond/g, 'pawn')
+        .replace(/porn/g, 'pawn')
+        .replace(/bon/g, 'pawn')
+        // Fix common chess terminology
+        .replace(/center square/g, 'center squares')
+        .replace(/central square/g, 'center squares')
+        .replace(/middle of the board/g, 'center');
+      
+      // Process text word by word for chess notation
+      let processed = processedText.split(' ').map(word => {
         // Check if this is a file (a-h)
         if (fileCorrections[word]) {
           return fileCorrections[word];
@@ -92,6 +133,10 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
         if (pieceCorrections[word] !== undefined) {
           return pieceCorrections[word];
         }
+        // Check if this is a chess term
+        if (chessTermCorrections[word]) {
+          return chessTermCorrections[word];
+        }
         return word;
       }).join(' ');
       
@@ -103,7 +148,8 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
         .replace(/captures/gi, 'x')
         .replace(/takes on/gi, 'x')
         .replace(/takes/gi, 'x')
-        .replace(/to/gi, '')
+        // Don't replace all instances of "to" as it can be part of a question
+        .replace(/\s+to\s+([a-h][1-8])/gi, ' $1')
         .replace(/castle/gi, 'O-O')
         .replace(/queen side castle/gi, 'O-O-O')
         .replace(/long castle/gi, 'O-O-O')
@@ -111,8 +157,32 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
         .replace(/king side castle/gi, 'O-O')
         .replace(/check/gi, '+')
         .replace(/checkmate/gi, '#')
-        .replace(/file/gi, '');
+        .replace(/file/gi, '')
+        // Fix common question patterns for speech recognition
+        .replace(/is\s+(.*?)\s+a good move/gi, 'Is $1 a good move?')
+        .replace(/what is the best move/gi, 'What is the best move?')
+        .replace(/why (.*?) the best move/gi, 'Why is $1 the best move?')
+        .replace(/explain the position/gi, 'Explain the position.')
+        .replace(/explain this position/gi, 'Explain this position.');
+        
+      // If the text looks like a question about chess, keep it as is
+      if (
+        processed.includes('best move') ||
+        processed.includes('why') ||
+        processed.includes('how') ||
+        processed.includes('what') ||
+        processed.includes('is') ||
+        processed.includes('explain') ||
+        processed.includes('center') ||
+        processed.includes('attack') ||
+        processed.includes('defense') ||
+        processed.includes('development') ||
+        processed.includes('should i')
+      ) {
+        return processed;
+      }
       
+      // If it looks like a chess move, format it as standard notation
       return processed;
     };
     
@@ -126,6 +196,9 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
         let bestTranscript = '';
         let bestConfidence = 0;
         
+        // Store all alternatives for improving recognition
+        const alternatives = [];
+        
         // Look at all alternatives to find the highest confidence
         for (let alt = 0; alt < event.results[i].length; alt++) {
           const currentTranscript = event.results[i][alt].transcript;
@@ -133,6 +206,7 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
           
           // Log all alternatives for debugging
           console.log(`Alternative ${alt}: "${currentTranscript}" (${(currentConfidence * 100).toFixed(1)}%)`);
+          alternatives.push({ text: currentTranscript, confidence: currentConfidence });
           
           if (currentConfidence > bestConfidence) {
             bestTranscript = currentTranscript;
@@ -140,10 +214,33 @@ const ChatInterface = ({ fen, evaluation, bestMoves }) => {
           }
         }
         
+        // If we have a chess-specific term in a lower confidence alternative, prefer it
+        // This helps with common chess terms that might be misrecognized
+        const chessTerms = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'e4', 'd4', 'center'];
+        for (const term of chessTerms) {
+          const altWithTerm = alternatives.find(alt => 
+            alt.text.toLowerCase().includes(term) && 
+            !bestTranscript.toLowerCase().includes(term) &&
+            alt.confidence > bestConfidence * 0.7 // Must be at least 70% of best confidence
+          );
+          
+          if (altWithTerm) {
+            console.log(`Preferring alternative with chess term "${term}": "${altWithTerm.text}"`);
+            bestTranscript = altWithTerm.text;
+            bestConfidence = altWithTerm.confidence;
+            break;
+          }
+        }
+        
         if (event.results[i].isFinal) {
           finalTranscript += bestTranscript;
-          // Show confidence for debugging
-          setRecognitionStatus(`Transcribed with ${(bestConfidence * 100).toFixed(1)}% confidence`);
+          // Show confidence and processed version for user feedback
+          const processedVersion = processChessNotation(bestTranscript);
+          if (processedVersion !== bestTranscript.toLowerCase()) {
+            setRecognitionStatus(`Transcribed: "${bestTranscript}" → "${processedVersion}"`);
+          } else {
+            setRecognitionStatus(`Transcribed with ${(bestConfidence * 100).toFixed(1)}% confidence`);
+          }
         } else {
           interimTranscript += bestTranscript;
         }
@@ -289,11 +386,91 @@ You can type or use the microphone button to speak your question. For chess nota
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
   
+  // Handle speaking the given text
+  const handleSpeak = async (text) => {
+    if (!text) return;
+    
+    try {
+      // Stop any ongoing speech
+      if (isSpeaking) {
+        stopSpeech();
+        setIsSpeaking(false);
+        return;
+      }
+      
+      // Process the text for better speech output
+      const processedText = prepareAnalysisForSpeech(text);
+      
+      setIsSpeaking(true);
+      
+      await speakText(processedText, {
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: (error) => {
+          console.error("Speech synthesis error:", error);
+          setIsSpeaking(false);
+        }
+      });
+    } catch (error) {
+      console.error("Failed to speak message:", error);
+      setIsSpeaking(false);
+    }
+  };
+
+  // Process user question for better chess understanding
+  const preprocessChessQuestion = (text) => {
+    // If already processed by speech recognition, just clean it up a bit
+    text = text.trim();
+    
+    // Common speech recognition errors in chess questions
+    const errorPatterns = [
+      { pattern: /\b2\b/g, replacement: 'to' },
+      { pattern: /\bpond(s)?\b/g, replacement: 'pawn$1' },
+      { pattern: /\bbon\b/g, replacement: 'pawn' },
+      { pattern: /\bbond\b/g, replacement: 'pawn' },
+      { pattern: /\bi'm trying 2\b/g, replacement: 'is it good to' },
+      { pattern: /\bwanted 2\b/g, replacement: 'should I' },
+      { pattern: /\bcentre square\b/g, replacement: 'center' },
+      { pattern: /\bcentral square\b/g, replacement: 'center' },
+      { pattern: /\bsquares? in the center\b/g, replacement: 'center' },
+      { pattern: /\bin the center\b/g, replacement: 'in the center' },
+      { pattern: /\bbest move in this position\b/g, replacement: 'best move' },
+      { pattern: /\bwhat should i do\b/g, replacement: 'what is the best move' },
+      { pattern: /\bporn\b/g, replacement: 'pawn' },
+      { pattern: /\bis ([a-h][1-8]) good\b/g, replacement: 'is $1 a good move' }
+    ];
+
+    // Apply each pattern
+    let processed = text;
+    for (const { pattern, replacement } of errorPatterns) {
+      processed = processed.replace(pattern, replacement);
+    }
+
+    // Add question mark if it looks like a question but doesn't have one
+    if (
+      (processed.startsWith('what') || 
+       processed.startsWith('why') || 
+       processed.startsWith('how') || 
+       processed.startsWith('is') || 
+       processed.startsWith('should') ||
+       processed.startsWith('can')) &&
+      !processed.endsWith('?')
+    ) {
+      processed = processed + '?';
+    }
+    
+    console.log('Processed question:', processed);
+    return processed;
+  };
+
   // Handle sending a message
   const handleSendMessage = async (text) => {
     if (!text.trim()) return;
-
-    // Add user message to chat
+    
+    // Process the text to handle common chess question issues
+    const processedText = preprocessChessQuestion(text);
+    
+    // Show original user message in chat
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setInputText('');
     setTranscript('');
@@ -308,31 +485,221 @@ You can type or use the microphone button to speak your question. For chess nota
         'advanced', // Always use advanced level
         false, // Not a game report 
         false, // Not a checkmate report
-        text // Include the user's question
+        processedText // Include the processed user question
       );
 
       // Add AI response to chat
       if (response && response.explanation) {
+        const aiResponse = response.explanation;
+        
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: response.explanation,
+          content: aiResponse,
           responseTime: response.responseTime
         }]);
+        
+        // Auto-speak the response if enabled
+        if (autoSpeak) {
+          handleSpeak(aiResponse);
+        }
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
     } catch (error) {
       console.error('Error getting AI response:', error);
+      const errorMessage = 'Sorry, I encountered an error processing your question. Please try again.';
+      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error processing your question. Please try again.'
+        content: errorMessage
       }]);
+      
+      if (autoSpeak) {
+        handleSpeak(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Toggle speech recognition (memoized with useCallback)
+  // Cleanup function for audio recording
+  const stopAndCleanupAudioStream = useCallback(() => {
+    // Stop the MediaRecorder if it's recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (error) {
+        console.error('Error stopping MediaRecorder:', error);
+      }
+    }
+    
+    // Stop all media tracks from the stream
+    if (streamRef.current) {
+      try {
+        const tracks = streamRef.current.getTracks();
+        tracks.forEach(track => track.stop());
+        streamRef.current = null;
+      } catch (error) {
+        console.error('Error stopping media tracks:', error);
+      }
+    }
+    
+    // Clean up references
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    setIsRecordingAudio(false);
+    isRecordingAudioRef.current = false;
+  }, []);
+
+  // Check if the audio service is available
+  const isAudioServiceAvailable = useCallback(async () => {
+    try {
+      // Make a simple OPTIONS request to check if the endpoint is available
+      const response = await fetch(GEMINI_AUDIO_URL, {
+        method: 'OPTIONS',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'omit'
+      });
+      
+      // If service responds correctly to OPTIONS request
+      return response.status === 204;
+    } catch (error) {
+      console.warn('Audio service availability check failed:', error);
+      return false;
+    }
+  }, []);
+  
+  // Manual audio recording function that saves to a file and sends to Gemini for transcription
+  const handleToggleAudioRecording = useCallback(async () => {
+    if (isRecordingAudio) {
+      // Already recording, so stop it when clicked again
+      setRecognitionStatus('Stopping recording...');
+      setIsRecordingAudio(false);
+      isRecordingAudioRef.current = false;
+  
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      } else {
+        stopAndCleanupAudioStream();
+      }
+      return;
+    }
+    
+    // Start new recording
+    setInputText('');
+    setTranscript('');
+    setRecognitionStatus('Initializing audio...');
+    audioChunksRef.current = [];
+    
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Your browser does not support audio recording');
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        } 
+      });
+      
+      streamRef.current = stream;
+      
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus';
+      }
+      
+      console.log(`Using mime type: ${mimeType} for audio recording`);
+      
+      const recorder = new MediaRecorder(stream, {
+        mimeType, 
+        audioBitsPerSecond: 128000
+      });
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+          console.log(`Received audio chunk: ${e.data.size} bytes`);
+        }
+      };
+      
+      mediaRecorderRef.current = recorder;
+      
+      recorder.onstop = async () => {
+        console.log('MediaRecorder stopped, processing audio...');
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log(`Recording complete: ${audioBlob.size} bytes`);
+        
+        if (audioBlob.size < 1000) {
+          setRecognitionStatus('Recording too short. Please try again and speak clearly.');
+          setIsRecordingAudio(false);
+          isRecordingAudioRef.current = false;
+          stopAndCleanupAudioStream();
+          return;
+        }
+        
+        setRecognitionStatus('Processing audio recording...');
+        
+        try {
+          const transcript = await sendAudioToGemini(audioBlob, fen);
+          
+          if (transcript && transcript !== 'No audible speech detected.') {
+            console.log('Transcription received:', transcript);
+            setInputText(transcript);
+            setRecognitionStatus(`Transcribed: "${transcript}"`);
+          } else {
+            console.warn('Empty or invalid transcript received');
+            setRecognitionStatus('No speech detected. Please try again.');
+          }
+        } catch (error) {
+          console.error('Error transcribing audio:', error);
+          setRecognitionStatus(`Error: ${error.message}`);
+        } finally {
+          setIsRecordingAudio(false);
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          mediaRecorderRef.current = null;
+        }
+      };
+      
+      recorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error);
+        setRecognitionStatus(`Recording error: ${event.error}`);
+        setIsRecordingAudio(false);
+        stopAndCleanupAudioStream();
+      };
+      
+      // Start recording with manual control
+      recorder.start(500);
+      setIsRecordingAudio(true);
+      isRecordingAudioRef.current = true;
+      setRecognitionStatus('Recording audio... Click microphone again to stop and process.');
+      
+    } catch (error) {
+      console.error('Error setting up audio recording:', error);
+      setRecognitionStatus(`Error: ${error.message}. Please type your question instead.`);
+      setIsRecordingAudio(false);
+      stopAndCleanupAudioStream();
+    }
+  }, [isRecordingAudio, fen, stopAndCleanupAudioStream]);
+  
+  
+  // Legacy speech recognition toggle (memoized with useCallback)
   const handleToggleRecording = useCallback(() => {
     // If there's a previous error, reset the recognition system first
     if (recognitionStatus && (
@@ -396,24 +763,82 @@ You can type or use the microphone button to speak your question. For chess nota
     }
   }, [isRecording, recognitionStatus, resetSpeechRecognition, initializeSpeechRecognition]);
   
-  // Keyboard shortcut for speech recognition (Ctrl+Space)
+  // Keyboard shortcut for speech recording (Ctrl+Space)
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Check for Ctrl+Space to toggle recording
       if (e.ctrlKey && e.code === 'Space') {
         e.preventDefault(); // Prevent space from scrolling the page
-        handleToggleRecording();
+        handleToggleAudioRecording(); // Use the Gemini audio recording
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleRecording]); // Re-add listener when handleToggleRecording changes
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      // Cancel any ongoing speech when component unmounts
+      stopSpeech();
+      // Clean up any audio recording resources
+      stopAndCleanupAudioStream();
+    };
+  }, [handleToggleAudioRecording, stopAndCleanupAudioStream]); // Re-add listener when handlers change
+  
+  // Get the last assistant message for easy speaking
+  const getLastAssistantMessage = () => {
+    if (messages.length === 0) return null;
+    
+    // Find the most recent assistant message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant') {
+        return messages[i].content;
+      }
+    }
+    
+    return null;
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center mr-2">
+            <input
+              type="checkbox"
+              id="autoSpeakChat"
+              checked={autoSpeak}
+              onChange={() => setAutoSpeak(!autoSpeak)}
+              className="mr-1 h-4 w-4"
+            />
+            <label htmlFor="autoSpeakChat" className="text-sm text-gray-600">Auto-speak</label>
+          </div>
+          <button
+            onClick={() => {
+              const lastMessage = getLastAssistantMessage();
+              if (lastMessage) handleSpeak(lastMessage);
+            }}
+            disabled={!getLastAssistantMessage() || isLoading || isSpeaking}
+            className={`flex items-center p-1.5 rounded-md text-white text-sm ${
+              !getLastAssistantMessage() || isLoading
+                ? 'bg-gray-300 cursor-not-allowed'
+                : isSpeaking
+                  ? 'bg-red-500'
+                  : 'bg-gray-700 hover:bg-gray-800'
+            }`}
+            title={isSpeaking ? "Stop speaking" : "Speak last response"}
+          >
+            {isSpeaking ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728"></path>
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
       
       {/* Messages container */}
@@ -436,13 +861,27 @@ You can type or use the microphone button to speak your question. For chess nota
                 }`}
               >
                 <div className="whitespace-pre-line">{message.content}</div>
-                {message.responseTime && (
-                  <div className="text-xs opacity-70 text-right mt-1">
-                    {typeof message.responseTime === 'number' 
-                      ? `${message.responseTime.toFixed(2)}s` 
-                      : `${message.responseTime}s`}
-                  </div>
-                )}
+                <div className="flex items-center justify-between mt-1">
+                  {message.role === 'assistant' && (
+                    <button
+                      onClick={() => handleSpeak(message.content)}
+                      disabled={isSpeaking}
+                      className={`p-1 rounded ${isSpeaking ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-300'}`}
+                      title="Speak this message"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728"></path>
+                      </svg>
+                    </button>
+                  )}
+                  {message.responseTime && (
+                    <div className="text-xs opacity-70 text-right">
+                      {typeof message.responseTime === 'number' 
+                        ? `${message.responseTime.toFixed(2)}s` 
+                        : `${message.responseTime}s`}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -486,6 +925,45 @@ You can type or use the microphone button to speak your question. For chess nota
       <div className="flex gap-2">
         <div className="relative">
           <button
+            onClick={handleToggleAudioRecording}
+            disabled={recognitionStatus && (recognitionStatus.includes('Processing') || recognitionStatus.includes('Initializing'))}
+            className={`p-2 rounded-full flex items-center justify-center ${
+              isRecordingAudio 
+                ? 'bg-red-600 text-white animate-pulse' 
+                : recognitionStatus && (recognitionStatus.includes('Processing') || recognitionStatus.includes('Initializing'))
+                  ? 'bg-purple-400 text-white animate-pulse cursor-not-allowed'
+                  : 'bg-purple-500 text-white hover:bg-purple-600'
+            }`}
+            title={
+              isRecordingAudio 
+                ? 'Click to STOP recording and transcribe' 
+                : recognitionStatus && (recognitionStatus.includes('Processing') || recognitionStatus.includes('Initializing'))
+                  ? 'Processing in progress, please wait...'
+                  : 'Start manual recording (Ctrl+Space)'
+            }
+          >
+            {isRecordingAudio ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              </svg>
+            )}
+            {isRecordingAudio && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </span>
+            )}
+          </button>
+        </div>
+        
+        {/* Legacy browser speech recognition (hidden for now)
+        <div className="relative hidden">
+          <button
             onClick={handleToggleRecording}
             className={`p-2 rounded-full flex items-center justify-center ${
               isRecording 
@@ -507,7 +985,6 @@ You can type or use the microphone button to speak your question. For chess nota
             </svg>
           </button>
           
-          {/* Add a reset button when needed */}
           {!isRecording && recognitionStatus && (
             recognitionStatus.includes('Error') || recognitionStatus.includes('Failed') || recognitionStatus.includes('denied')
           ) && (
@@ -519,7 +996,7 @@ You can type or use the microphone button to speak your question. For chess nota
               ×
             </button>
           )}
-        </div>
+        </div>*/}
         <div className="flex-1 relative">
           <input
             type="text"
