@@ -1,48 +1,163 @@
 // Backend/gcloud/analyze-position/player-levels.js
-
-// Configuration for different player skill levels
+// Configuration for different player skill levels with enhanced chess expertise
 const playerLevelConfig = {
     beginner: {
-      concepts: ['piece development', 'controlling the center', 'basic tactics', 'king safety'],
+      concepts: ['piece development', 'controlling the center', 'basic tactics', 'king safety', 'piece values'],
       complexity: 'low',
-      terms: ['attack', 'defend', 'protect', 'capture', 'threat'],
-      avoidTerms: ['zugzwang', 'prophylaxis', 'pawn structure subtleties']
+      terms: ['attack', 'defend', 'protect', 'capture', 'threat', 'check', 'checkmate', 'castle'],
+      avoidTerms: ['zugzwang', 'prophylaxis', 'compensation', 'initiative'],
+      gamePhases: {
+        opening: 'Focus on developing knights and bishops, controlling the central squares (e4, d4, e5, d5), and castling early',
+        middlegame: 'Focus on piece activity and king safety',
+        endgame: 'Focus on pawn promotion and king activity'
+      },
+      pieceValues: 'Remember basic piece values: Queen (9), Rook (5), Bishop (3), Knight (3), Pawn (1)'
     },
     intermediate: {
-      concepts: ['pawn structure', 'piece coordination', 'tactical patterns', 'initiative'],
+      concepts: ['pawn structure', 'piece coordination', 'tactical patterns', 'initiative', 'active pieces'],
       complexity: 'medium',
-      terms: ['pin', 'fork', 'discovered attack', 'overloaded piece', 'tempo'],
-      avoidTerms: ['deep endgame theory']
+      terms: ['pin', 'fork', 'discovered attack', 'overloaded piece', 'tempo', 'outpost', 'weak squares'],
+      avoidTerms: ['deep endgame theory', 'prophylaxis subtleties'],
+      gamePhases: {
+        opening: 'Consider pawn structure implications and piece placement for middlegame plans',
+        middlegame: 'Coordinate pieces toward strategic goals and watch for tactical opportunities',
+        endgame: 'Understand basic endgame principles for rook, bishop, and knight endings'
+      },
+      pieceValues: 'Remember that piece activity often matters more than raw material - an active knight on an outpost can be worth more than a passive rook'
     },
     advanced: {
-      concepts: ['positional play', 'strategic planning', 'piece imbalances', 'prophylaxis'],
+      concepts: ['positional play', 'strategic planning', 'piece imbalances', 'prophylaxis', 'dynamic compensation'],
       complexity: 'high',
-      terms: ['counterplay', 'compensation', 'initiative', 'weak squares', 'pawn breaks'],
-      avoidTerms: []
+      terms: ['counterplay', 'compensation', 'initiative', 'weak squares', 'pawn breaks', 'piece coordination', 'prophylaxis'],
+      avoidTerms: [],
+      gamePhases: {
+        opening: 'Consider specific pawn structures and their strategic implications',
+        middlegame: 'Balance positional and tactical elements while forming long-term plans',
+        endgame: 'Apply technical precision in converting advantages, including opposite-colored bishop dynamics and rook endgame techniques'
+      },
+      pieceValues: 'Evaluate pieces contextually - understand when a piece\'s strategic value exceeds its nominal value, such as a knight dominating on d6 versus a trapped rook'
     }
   };
   
-  // Create a prompt tailored to the player's skill level
-  function createSkillLevelPrompt(fen, evaluation, bestMoves, playerLevel) {
+  /**
+   * Determines the phase of the game based on the FEN position
+   * @param {string} fen - Current position in FEN notation
+   * @returns {string} - 'opening', 'middlegame', or 'endgame'
+   */
+  function determineGamePhase(fen) {
+    // Count total pieces on the board from FEN
+    const piecesSection = fen.split(' ')[0];
+    const pieceCount = (piecesSection.match(/[pnbrqkPNBRQK]/g) || []).length;
+    
+    // Count developed pieces (knights, bishops, rooks, queens)
+    const developedPieces = (piecesSection.match(/[NBRQ]/g) || []).length;
+    
+    if (pieceCount >= 28 && developedPieces <= 4) {
+      return 'opening';
+    } else if (pieceCount <= 14) {
+      return 'endgame';
+    } else {
+      return 'middlegame';
+    }
+  }
+  
+  // Create a specialized opening analysis prompt
+  function createOpeningPrompt(fen, evaluation, bestMoves, playerLevel) {
     const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
     
     return `
-    As a chess coach for a ${playerLevel} player, analyze this position:
+    You are OpeningMaster, a chess opening coach for a ${playerLevel} player.
     
-    FEN: ${fen}
-    Stockfish evaluation: ${evaluation || 'Not available'}
-    Best moves: ${formatBestMoves(bestMoves)}
+    Position: ${fen}
+    Engine Evaluation: ${evaluation || 'Not available'}
+    Best Moves: ${formatBestMoves(bestMoves)}
     
-    Provide a clear explanation focusing on:
-    1. The key elements in this position appropriate for a ${playerLevel} (${config.complexity} complexity)
-    2. Why Stockfish's recommended move is good and what it accomplishes
-    3. What the player should watch out for
-    4. One specific concept to learn from this position: focus on ${config.concepts.join(', ')}
+    ## Opening Identification
+    Identify the opening or opening family this position belongs to.
     
-    Use language appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+    ## Development Assessment
+    Analyze the development status of both sides:
+    - Which pieces are developed and which still need development?
+    - Is the king safely castled?
+    - How is the center control for both sides?
+    
+    ## Key Opening Principles
+    ${playerLevel === 'beginner' ? 
+      'For beginners, focus on the core opening principles: develop knights and bishops, control the center (especially e4, d4, e5, d5), castle early, and connect the rooks. 1.e4 and 1.d4 are excellent first moves to learn.' : 
+      playerLevel === 'intermediate' ? 
+      'For intermediates, explain how this opening\'s pawn structure shapes the middlegame plans and piece placement.' :
+      'For advanced players, analyze the specific strategic ideas in this opening variation and potential transpositions.'}
+    
+    ## Best Move Explanation
+    Explain why the engine's recommended move follows good opening principles:
+    - How does it contribute to development?
+    - How does it affect center control?
+    - Does it prepare for castling or other strategic goals?
+    
+    ## Common Pitfalls
+    Mention one or two common mistakes that players at the ${playerLevel} level might make in this opening position.
+    
+    Keep your explanation educational and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+    ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+    `;
+  }
+  
+  // Create a specialized middlegame analysis prompt
+  function createMiddlegamePrompt(fen, evaluation, bestMoves, playerLevel) {
+    const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+    
+    return `
+    You are MiddlegameMaster, a chess middlegame coach for a ${playerLevel} player.
+    
+    Position: ${fen}
+    Engine Evaluation: ${evaluation || 'Not available'}
+    Best Moves: ${formatBestMoves(bestMoves)}
+    
+    ## Position Structure
+    Analyze the key structural elements of this middlegame position:
+    - Pawn structure (chains, islands, weak pawns)
+    - Piece activity and coordination
+    - King safety for both sides
+    - Control of key squares, especially in the center (e4, d4, e5, d5)
+    - Open files and diagonals
+    
+    ## Strategic Assessment
+    Identify the main strategic themes:
+    - Who has the better minor pieces?
+    - Are there weak squares to exploit?
+    - Which side has better space control?
+    - Are there pawn breaks to consider?
+    
+    ## Tactical Opportunities
+    Note any immediate tactical possibilities:
+    - Piece combinations
+    - Attacking chances
+    - Defensive requirements
+    
+    ## Best Move Explanation
+    Explain why the engine's recommended move is strong:
+    - How does it fit a strategic plan?
+    - What tactical ideas does it support or prevent?
+    - How does it improve piece activity?
+    
+    ## Three Most Important Factors
+    Remember that in each middlegame position, a player must consider:
+    - King safety
+    - Piece activity
+    - The opponent's plans and threats
+    
+    ## Planning Advice
+    Provide specific planning advice for the ${playerLevel} player:
+    ${playerLevel === 'beginner' ? 
+      'Focus on improving your least active pieces and securing your king.' : 
+      playerLevel === 'intermediate' ? 
+      'Develop a concrete plan based on the pawn structure and piece imbalances.' :
+      'Consider both the immediate tactical possibilities and long-term strategic plans based on the specific characteristics of this position.'}
+    
+    Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
     ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
     
-    Keep your explanation concise and educational.
+    Remember: ${config.pieceValues}
     `;
   }
   
@@ -60,5 +175,10 @@ const playerLevelConfig = {
   
   module.exports = {
     createSkillLevelPrompt,
+    createTacticalPrompt,
+    createOpeningPrompt,
+    createEndgamePrompt,
+    createMiddlegamePrompt,
+    determineGamePhase,
     playerLevelConfig
   };

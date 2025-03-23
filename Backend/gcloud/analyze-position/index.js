@@ -29,31 +29,57 @@ exports.analyzeChessPosition = async (req, res) => {
       }
     });
 
-    const { fen, evaluation, bestMoves, playerLevel = 'beginner', analysisType = 'general' } = req.body || {};
+    const { 
+      fen, 
+      evaluation, 
+      bestMoves, 
+      playerLevel = 'beginner', 
+      analysisType 
+    } = req.body || {};
     
     if (!fen) {
       return res.status(400).json({ error: 'FEN position is required' });
     }
-
+    
+    // Validate playerLevel
+    const validLevels = ['beginner', 'intermediate', 'advanced'];
+    const validatedLevel = validLevels.includes(playerLevel) ? playerLevel : 'beginner';
+    
     // Create detailed position analysis
     const positionDetails = createPositionDescription(fen);
     
-    // Create prompt based on player level and analysis type
+    // Determine game phase if analysisType is not specified
+    let detectedAnalysisType = analysisType;
+    if (!detectedAnalysisType) {
+      const gamePhase = determineGamePhase(fen);
+      detectedAnalysisType = gamePhase;
+    }
+    
+    // Create prompt based on player level and detected analysis type
     let prompt;
     
-    if (analysisType === 'general') {
-      prompt = createSkillLevelPrompt(fen, evaluation, bestMoves, playerLevel);
-    } else if (analysisType === 'tactical') {
-      prompt = createTacticalPrompt(fen, evaluation, bestMoves, playerLevel);
-    } else if (analysisType === 'educational') {
-      prompt = createEducationalPrompt(fen, evaluation, bestMoves, playerLevel);
-    } else {
-      prompt = createSkillLevelPrompt(fen, evaluation, bestMoves, playerLevel);
+    switch (detectedAnalysisType) {
+      case 'opening':
+        prompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
+        break;
+      case 'middlegame':
+        prompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
+        break;
+      case 'endgame':
+        prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
+        break;
+      case 'tactical':
+        prompt = createTacticalPrompt(fen, evaluation, bestMoves, validatedLevel);
+        break;
+      default:
+        prompt = createSkillLevelPrompt(fen, evaluation, bestMoves, validatedLevel);
     }
     
     // Combine position details with the prompt
     const fullPrompt = `${positionDetails}\n\n${prompt}`;
 
+    console.log(`Analyzing position for ${validatedLevel} player using ${detectedAnalysisType} analysis type`);
+    
     const result = await generativeModel.generateContent({
       contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
     });
@@ -64,59 +90,11 @@ exports.analyzeChessPosition = async (req, res) => {
 
     return res.status(200).json({
       explanation: text,
-      analysisType,
-      playerLevel
+      analysisType: detectedAnalysisType,
+      playerLevel: validatedLevel
     });
   } catch (error) {
     console.error('Error:', error);
     return res.status(500).json({ error: error.message });
   }
 };
-
-// Create a tactical analysis prompt
-function createTacticalPrompt(fen, evaluation, bestMoves, playerLevel) {
-  return `
-  As a chess tactical coach, analyze this position for a ${playerLevel} player:
-  
-  FEN: ${fen}
-  Stockfish evaluation: ${evaluation || 'Not available'}
-  Best moves: ${formatBestMoves(bestMoves)}
-  
-  Focus exclusively on the tactical elements:
-  1. Are there any immediate tactics in this position? (pins, forks, discovered attacks, etc.)
-  2. What is the concrete calculation behind Stockfish's recommended move?
-  3. Are there any tactical traps or blunders to avoid?
-  
-  Use clear, simple language appropriate for a ${playerLevel} player.
-  `;
-}
-
-// Create an educational prompt focused on learning
-function createEducationalPrompt(fen, evaluation, bestMoves, playerLevel) {
-  return `
-  As a chess teacher, use this position as a learning opportunity for a ${playerLevel} player:
-  
-  FEN: ${fen}
-  Stockfish evaluation: ${evaluation || 'Not available'}
-  Best moves: ${formatBestMoves(bestMoves)}
-  
-  Focus on making this educational:
-  1. What is the main chess principle or lesson to learn from this position?
-  2. How does Stockfish's recommended move demonstrate this principle?
-  3. Provide a simple rule or guideline the player can remember for similar positions
-  
-  Use clear, simple language appropriate for a ${playerLevel} player.
-  `;
-}
-
-// Helper function to format best moves
-function formatBestMoves(bestMoves) {
-  if (!Array.isArray(bestMoves) || bestMoves.length === 0) {
-    return 'Not available';
-  }
-  
-  return bestMoves.map((move, index) => {
-    const moveText = move.san || move.uci;
-    return `Move ${index + 1}: ${moveText}`;
-  }).join('\n');
-}
