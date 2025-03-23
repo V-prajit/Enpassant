@@ -1,15 +1,20 @@
-# Stockfish Analysis Service for Google Cloud Run
+# Stockfish Analysis Service with Persistent Storage
 
-This service runs Stockfish chess engine in a Docker container on Google Cloud Run, enabling chess position analysis in the cloud.
+This service runs Stockfish chess engine in a Docker container on Google Cloud Run with persistent storage using Firestore. It enables chess position analysis in the cloud with caching and popular openings library.
 
 ## Architecture
 
-The solution consists of two main components:
+The solution consists of three main components:
 
 1. **Stockfish Analysis Service (Cloud Run)**: A Docker container running Stockfish with an Express.js API
 2. **Analysis Function (Cloud Function)**: A lightweight proxy that forwards requests to the Cloud Run service
+3. **Firestore Database**: Persistent storage for caching analysis results and popular openings
 
-This separation allows the heavy computation (Stockfish analysis) to run on Cloud Run's scalable infrastructure, while keeping the API interface consistent.
+This architecture allows for:
+- Heavy computation (Stockfish analysis) to run on Cloud Run's scalable infrastructure
+- Fast retrieval of previously analyzed positions from the persistent cache
+- Preloading of popular openings for instant analysis
+- Consistent API interface for frontend applications
 
 ## Prerequisites
 
@@ -20,9 +25,9 @@ This separation allows the heavy computation (Stockfish analysis) to run on Clou
 
 ## Deployment Steps
 
-### 1. Deploy the Stockfish Service to Cloud Run
+### 1. Deploy the Stockfish Service to Cloud Run with Persistent Storage
 
-Run the deployment script:
+Run the enhanced deployment script:
 
 ```bash
 cd Backend/gcloud/stockfish-cloud-run
@@ -30,23 +35,41 @@ cd Backend/gcloud/stockfish-cloud-run
 ```
 
 This script will:
-1. Build the Docker image and upload it to Google Container Registry
-2. Deploy the service to Cloud Run
-3. Create a `stockfish-client.js` file with the correct service URL
+1. Set up a service account with Firestore permissions
+2. Build the Docker image and upload it to Google Container Registry
+3. Deploy the service to Cloud Run with the required environment variables
+4. Create a `stockfish-client.js` file with the correct service URL
+5. Set up status endpoints for retrieving cached analysis
 
 Note the Cloud Run service URL that is displayed after deployment.
 
-### 2. Deploy the Stockfish Analysis Cloud Function
+### 2. Deploy the Stockfish Analysis Cloud Functions
 
 ```bash
 cd Backend/gcloud/analyze-position
 npm install  # Install dependencies including node-fetch
-npm run deploy-stockfish
+gcloud functions deploy analyzeWithStockfish --runtime nodejs18 --trigger-http --allow-unauthenticated
+gcloud functions deploy analyzeWithStockfishStatus --runtime nodejs18 --trigger-http --allow-unauthenticated
 ```
 
-### 3. Update your Frontend to use the Cloud Function
+### 3. Initialize Popular Openings (Optional)
 
-The frontend API client is already configured to use the Cloud Function, so it should work without changes once the Cloud Function is deployed.
+The deployment process automatically initializes the popular openings collection. If you want to add more openings later:
+
+```bash
+# Set your admin API key in environment
+export ADMIN_API_KEY=your-secure-key-here
+
+# Add popular openings
+curl -X POST https://your-service-url/admin/popular-openings \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $ADMIN_API_KEY" \
+  -d @popular-openings.json
+```
+
+### 4. Update your Frontend to use the Cloud Functions
+
+The frontend API client is already configured to use the Cloud Functions, so it should work without changes once they're deployed. The caching system will automatically speed up repeated analysis requests.
 
 ## Testing the Deployment
 
@@ -81,6 +104,9 @@ curl -X POST http://localhost:8081 \
 ## Advantages of This Approach
 
 1. **Scalability**: Cloud Run automatically scales based on load
-2. **Cost Efficiency**: You only pay for what you use
+2. **Cost Efficiency**: You only pay for what you use, and caching reduces computation needs
 3. **Architecture Independence**: Works on any device since computation happens in the cloud
-4. **Performance**: Uses Google's infrastructure for fast analysis
+4. **Performance**: Uses Google's infrastructure for fast analysis with cached results
+5. **Persistence**: Analysis results are stored permanently and reused across sessions
+6. **Educational Value**: Popular openings are available instantly for study and learning
+7. **Progressive Updates**: Provides incremental analysis results for responsive UI feedback

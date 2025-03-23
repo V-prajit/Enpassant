@@ -12,6 +12,42 @@ export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => 
     console.log(`Starting analysis with target depth ${depth}...`);
     const startTime = performance.now();
     
+    // First, check if we have a cached analysis available
+    try {
+      // Use a lower minDepth to increase likelihood of cache hit
+      const minDepth = Math.max(8, depth - 10);
+      const statusUrl = `${STOCKFISH_URL}/status/${encodeURIComponent(fen)}?minDepth=${minDepth}`;
+      
+      console.log(`Checking for cached analysis at URL: ${statusUrl}`);
+      const cachedResponse = await fetchWithTimeout(statusUrl, { method: 'GET' }, 3000);
+      
+      if (cachedResponse.ok) {
+        const cachedResult = await cachedResponse.json();
+        const cachedTime = Math.round(performance.now() - startTime);
+        console.log(`Found cached analysis in ${cachedTime}ms at depth ${cachedResult.depth} (requested min: ${minDepth})`);
+        
+        if (onUpdate) {
+          onUpdate(cachedResult);
+        }
+        
+        // If the cached result meets or exceeds our needs, use it directly
+        if (cachedResult.depth >= depth || cachedResult.completed) {
+          console.log(`Using cached result with depth ${cachedResult.depth} directly`);
+          return cachedResult;
+        }
+        
+        // Otherwise, we got a good head start and will continue with polling
+        console.log(`Using cached result as baseline at depth ${cachedResult.depth}, continuing analysis`);
+        currentDepth = cachedResult.depth;
+        lastResult = cachedResult;
+      }
+    } catch (cacheError) {
+      // Ignore cache check errors, just proceed with full analysis
+      console.log('No cached analysis found or error checking cache:', cacheError);
+      console.log('Performing full analysis');
+    }
+    
+    // Start or continue the analysis
     const response = await fetch(STOCKFISH_URL, {
       method: 'POST',
       headers: {
@@ -43,7 +79,10 @@ export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => 
       
       const pollInterval = setInterval(async () => {
         try {
-          const statusUrl = `${STOCKFISH_URL.replace(/\/$/, '')}/status/${encodeURIComponent(fen)}?minDepth=${currentDepth + 1}`;
+          // Set minimum depth for polling to just one more than current depth
+          const minDepthForPoll = currentDepth + 1;
+          const statusUrl = `${STOCKFISH_URL}/status/${encodeURIComponent(fen)}?minDepth=${minDepthForPoll}`;
+          console.log(`Polling for updates with minDepth=${minDepthForPoll}`);
           const pollResponse = await fetch(statusUrl);
           
           if (pollResponse.ok) {

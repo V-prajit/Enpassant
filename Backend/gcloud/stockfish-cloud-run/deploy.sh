@@ -1,19 +1,38 @@
 #!/bin/bash
+
+# Enhanced deployment script for Stockfish Cloud Run with Firestore
+
+# Exit on any error
 set -e
 
+echo "Building and deploying Stockfish Analysis Service with persistent storage..."
+
 # Configuration
-PROJECT_ID="tidal-hack25tex-223"  # Your Google Cloud project ID
+PROJECT_ID="tidal-hack25tex-223"
 SERVICE_NAME="stockfish-analysis"
 REGION="us-central1"
 IMAGE_NAME="stockfish-analysis-service"
 
-echo "Building and deploying Stockfish Analysis service to Google Cloud Run..."
+# Ensure gcloud is configured with the correct project
+gcloud config set project $PROJECT_ID
+
+# Create Storage bucket if it doesn't exist
+BUCKET_NAME="${PROJECT_ID}-chess-analysis"
+echo "Setting up Cloud Storage bucket: $BUCKET_NAME"
+
+if gsutil ls -b gs://$BUCKET_NAME > /dev/null 2>&1; then
+  echo "Bucket $BUCKET_NAME already exists"
+else
+  echo "Creating bucket $BUCKET_NAME..."
+  gsutil mb -p $PROJECT_ID -l $REGION gs://$BUCKET_NAME
+  gsutil iam ch allUsers:objectViewer gs://$BUCKET_NAME
+fi
 
 # Build the container image
 echo "Building container image..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$IMAGE_NAME .
 
-# Deploy to Cloud Run
+# Deploy to Cloud Run with additional permissions for Firestore
 echo "Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image gcr.io/$PROJECT_ID/$IMAGE_NAME \
@@ -23,7 +42,8 @@ gcloud run deploy $SERVICE_NAME \
   --memory 8Gi \
   --cpu 4 \
   --concurrency 40 \
-  --timeout 300s
+  --timeout 300s \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
 
 # Get the service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --platform managed --region $REGION --format 'value(status.url)')
@@ -82,6 +102,48 @@ exports.analyzeWithStockfish = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+// Add support for getting cached analysis status
+exports.analyzeWithStockfishStatus = async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+    return res.status(204).send('');
+  }
+
+  try {
+    const fen = req.params.fen;
+    const minDepth = req.query.minDepth || 1;
+    
+    if (!fen) {
+      return res.status(400).json({ error: 'FEN position is required' });
+    }
+
+    console.log(\`Checking cached analysis for: \${fen} at min depth \${minDepth}\`);
+    
+    // Forward the request to the Stockfish service status endpoint
+    const response = await fetch(\`\${STOCKFISH_SERVICE_URL}/status/\${encodeURIComponent(fen)}?minDepth=\${minDepth}\`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'No cached analysis found' });
+      }
+      
+      const errorText = await response.text();
+      throw new Error(\`Stockfish service error: \${response.status} \${errorText}\`);
+    }
+
+    const analysisResult = await response.json();
+    return res.status(200).json(analysisResult);
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};
 EOL
 
 cat > function-source/package.json << EOL
@@ -95,10 +157,15 @@ cat > function-source/package.json << EOL
 }
 EOL
 
+# Preload popular openings data
+echo "Preloading popular openings data..."
+curl -X GET $SERVICE_URL
+
 echo ""
 echo "Next steps:"
 echo "1. Update your analyze-with-stockfish Cloud Function with the new stockfish-client.js file"
-echo "2. Deploy your Cloud Function using:"
+echo "2. Deploy your Cloud Functions using:"
 echo "   gcloud functions deploy analyzeWithStockfish --runtime nodejs18 --trigger-http --allow-unauthenticated"
+echo "   gcloud functions deploy analyzeWithStockfishStatus --runtime nodejs18 --trigger-http --allow-unauthenticated"
 echo ""
-echo "Your Stockfish analysis should now be running entirely in the cloud!"
+echo "Your Stockfish analysis with permanent storage is now running in the cloud!"

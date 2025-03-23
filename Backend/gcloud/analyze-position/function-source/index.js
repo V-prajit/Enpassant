@@ -46,3 +46,45 @@ exports.analyzeWithStockfish = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+// Add support for getting cached analysis status
+exports.analyzeWithStockfishStatus = async (req, res) => {
+  // Set CORS headers
+  res.set('Access-Control-Allow-Origin', '*');
+  
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Methods', 'GET');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    res.set('Access-Control-Max-Age', '3600');
+    return res.status(204).send('');
+  }
+
+  try {
+    const fen = req.params.fen;
+    const minDepth = req.query.minDepth || 1;
+    
+    if (!fen) {
+      return res.status(400).json({ error: 'FEN position is required' });
+    }
+
+    console.log(`Checking cached analysis for: ${fen} at min depth ${minDepth}`);
+    
+    // Forward the request to the Stockfish service status endpoint
+    const response = await fetch(`${STOCKFISH_SERVICE_URL}/status/${encodeURIComponent(fen)}?minDepth=${minDepth}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'No cached analysis found' });
+      }
+      
+      const errorText = await response.text();
+      throw new Error(`Stockfish service error: ${response.status} ${errorText}`);
+    }
+
+    const analysisResult = await response.json();
+    return res.status(200).json(analysisResult);
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+};

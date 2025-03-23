@@ -23,8 +23,11 @@ RUN git clone https://github.com/official-stockfish/Stockfish.git && \
 COPY package.json ./
 RUN npm install
 
-# Copy application code
-COPY server.js ./
+# Copy all application files
+COPY . ./
+
+# Create cache directories
+RUN mkdir -p tmp-cache analysis-cache openings-cache
 
 # Expose the port the app runs on
 EXPOSE 8080
