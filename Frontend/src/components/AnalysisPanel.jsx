@@ -294,107 +294,42 @@ const AnalysisPanel = ({
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
       
-      <div className="evaluation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Evaluation</h4>
-        <div className="eval-display flex items-center">
-          <div className={`text-lg font-bold ${
-            evaluation.includes('Mate') 
-              ? evaluation.includes('Mated') ? 'text-red-600' : 'text-green-600'
-              : parseFloat(evaluation) > 0 
-                ? 'text-green-600' 
-                : parseFloat(evaluation) < 0 
-                  ? 'text-red-600' 
-                  : 'text-gray-800'
-          }`}>
-            {evaluation.includes('Mate') 
-              ? evaluation 
-              : parseFloat(evaluation) > 0 
-                ? '+' + Math.abs(parseFloat(evaluation)).toFixed(2) 
-                : parseFloat(evaluation) < 0
-                  ? '-' + Math.abs(parseFloat(evaluation)).toFixed(2)
-                  : '0.00'
-            }
-          </div>
-          
-          {isAnalyzing && (
-            <div className="ml-3 text-sm text-gray-600 flex items-center">
-              <div className="animate-spin h-4 w-4 border-2 border-green-500 rounded-full border-t-transparent mr-2"></div>
-              Analyzing...
-            </div>
-          )}
-          
-          {bestMoves.length > 0 && bestMoves[0]?.source && (
-            <div className="ml-3 text-xs text-gray-500 flex items-center">
-              {bestMoves[0].source === 'local' ? (
-                <>
-                  <span>Browser analysis at depth {bestMoves[0].depth || '?'}</span>
-                  {isAnalyzing && (
-                    <span className="ml-2 flex items-center">
-                      <div className="animate-pulse h-2 w-2 bg-blue-400 rounded-full mr-1"></div>
-                      <span className="text-blue-500">Cloud analysis in progress...</span>
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span>Cloud analysis at depth {bestMoves[0].depth || '?'}</span>
-              )}
-            </div>
-          )}
-        </div>
-        
-        {/* Vertical eval bar now shown to the left of the board */}
-      </div>
-      
       <div className="best-moves mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
-        {bestMoves.length > 0 ? (
-          <ul className="list-none p-0 border rounded-md divide-y shadow-sm">
-            {bestMoves.map((move, index) => (
-              <li 
-                key={index} 
-                className="py-2 px-3 cursor-pointer hover:bg-gray-100 flex items-center"
-                onClick={() => onSelectMove && onSelectMove(move)}
-              >
-                <div className="move-number mr-3 bg-green-100 text-green-800 px-2 py-1 rounded-md font-medium text-sm">
-                  {index + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold">{move.san || 'Unknown'}</div>
-                  <div className="text-xs text-gray-600">{move.uci}</div>
-                </div>
-                <div className="ml-auto">
-                  <button 
-                    className="text-sm bg-gray-800 hover:bg-gray-900 text-white px-2 py-1 rounded shadow-sm transition-all duration-200"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectMove && onSelectMove(move);
-                    }}
-                  >
-                    Play
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : isAnalyzing ? (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
-            <p className="text-gray-600">Analyzing position...</p>
-          </div>
-        ) : (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <p className="text-gray-600 italic">No suggested moves available</p>
-            {!autoAnalyze && (
-              <button
-                onClick={() => handleAnalyze(depth)}
-                className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
-              >
-                Analyze Now
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+  <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
+  {bestMoves.filter(move => move.san).length > 0 ? (
+    <div className="flex gap-3">
+      {bestMoves.filter(move => move.san).slice(0, 5).map((move, index) => (
+        <button
+          key={index}
+          onClick={() => onSelectMove && onSelectMove(move)}
+          className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition-colors duration-200"
+        >
+          <span className="text-sm font-bold text-green-600">
+            {move.san}
+          </span>
+        </button>
+      ))}
+    </div>
+  ) : isAnalyzing ? (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
+      <p className="text-gray-600">Analyzing position...</p>
+    </div>
+  ) : (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <p className="text-gray-600 italic">No suggested moves available</p>
+      {!autoAnalyze && (
+        <button
+          onClick={() => handleAnalyze(depth)}
+          className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
+        >
+          Analyze Now
+        </button>
+      )}
+    </div>
+  )}
+</div>
+
       
       <div className="analysis-settings mb-6">
         <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
@@ -439,18 +374,7 @@ const AnalysisPanel = ({
       </div>
 
       <div className="ai-explanation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
         <div className="controls flex flex-wrap gap-3 mb-4">
-          <button 
-            onClick={() => handleGetExplanation(false)} 
-            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
-            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
-              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
-          >
-            {isLoading ? 'Loading explanation...' : evaluation.includes('Checkmate') ? 'Get Game Report' : 'Get AI Explanation'}
-          </button>
           
           <button 
             onClick={() => handleGetExplanation(true)} 
@@ -494,87 +418,47 @@ const AnalysisPanel = ({
           )}
         </div>
       </div>
-      
-      <div className="voice-controls">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Voice Output</h4>
-        <div className="bg-gray-50 p-3 rounded-md shadow-sm mb-4">
-          <div className="flex flex-wrap gap-4 mb-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="autoSpeak"
-                checked={autoSpeak}
-                onChange={() => setAutoSpeak(!autoSpeak)}
-                className="mr-2 h-4 w-4"
-              />
-              <label htmlFor="autoSpeak" className="text-gray-800">Auto-speak analysis</label>
-            </div>
-            
-            <div className="flex items-center">
-              <label htmlFor="speechRate" className="mr-2 text-gray-800">Speech Rate:</label>
-              <select
-                id="speechRate"
-                value={speechRate}
-                onChange={(e) => setSpeechRate(Number(e.target.value))}
-                className="py-1 px-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-1 text-gray-800"
-              >
-                <option value="1.0">1x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2.0">2x</option>
-                <option value="2.5">2.5x</option>
-                <option value="3.0">3x</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <button 
-              onClick={() => handleSpeak()}
-              disabled={!explanation || isLoading}
-              className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
-                !explanation || isLoading 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : isSpeaking
-                    ? 'bg-red-500 hover:bg-red-600'
-                    : 'bg-gray-700 hover:bg-gray-800'
-              }`}
-            >
-              {isSpeaking ? (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-                  </svg>
-                  Stop Speaking
-                </>
-              ) : (
-                <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728">
-                    </path>
-                  </svg>
-                  Speak Analysis
-                </>
-              )}
-            </button>
-            
-            <button 
-              onClick={handleSpeakEvaluation}
-              disabled={!bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing}
-              className={`flex items-center py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md ${
-                !bestMoves || bestMoves.length === 0 || isSpeaking || isAnalyzing
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3"></path>
-              </svg>
-              Speak Evaluation
-            </button>
-          </div>
-        </div>
-      </div>
+<div className="flex justify-between items-center mb-4">
+  <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
+  <div className="flex items-center gap-2">
+    <div className="flex items-center mr-2">
+      <input
+        type="checkbox"
+        id="autoSpeakChat"
+        checked={autoSpeak}
+        onChange={() => setAutoSpeak(!autoSpeak)}
+        className="mr-1 h-4 w-4"
+      />
+      <label htmlFor="autoSpeakChat" className="text-sm text-gray-600">Auto-speak</label>
+    </div>
+    <button
+      onClick={() => {
+        const lastMessage = getLastAssistantMessage();
+        if (lastMessage) handleSpeak(lastMessage);
+      }}
+      disabled={!getLastAssistantMessage() || isLoading || isSpeaking}
+      className={`flex items-center p-1.5 rounded-md text-white text-sm ${
+        !getLastAssistantMessage() || isLoading
+          ? 'bg-gray-300 cursor-not-allowed'
+          : isSpeaking
+            ? 'bg-red-500'
+            : 'bg-gray-700 hover:bg-gray-800'
+      }`}
+      title={isSpeaking ? "Stop speaking" : "Speak last response"}
+    >
+      {isSpeaking ? (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15.465a5 5 0 001.414 1.414m-.293-4.95a7 7 0 011.414-3.95m2.879 2.879a3 3 0 00-4.243-4.243m2.121-2.121a7 7 0 0110 0l-5 5m-9.9 2.828a13 13 0 000 12.728"></path>
+        </svg>
+      )}
+    </button>
+  </div>
+</div>
     </div>
   );
 };
