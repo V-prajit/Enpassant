@@ -560,85 +560,128 @@ export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beg
  * @returns {Promise<string>} - Promise that resolves with the transcribed text
  */
 export const sendAudioToGemini = async (audioBlob, fen) => {
-  try {
-    // If we've already determined the service isn't working, fail fast
-    if (!audioServiceWorking) {
-      throw new Error('Audio transcription service is not available');
-    }
-
-    // Check audio size - fail early if it's empty (using lower threshold to match frontend)
-    if (!audioBlob || audioBlob.size < 500) {
-      console.error('Audio blob is empty or too small:', audioBlob?.size || 0, 'bytes');
-      throw new Error('Audio recording is too short or empty. Please try again and speak clearly.');
-    }
-
-    console.log(`Sending audio for transcription (${Math.round(audioBlob.size / 1024)} KB)...`);
-    const startTime = performance.now();
-    
-    // Create a FormData object to send the audio file
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.webm');
-    
-    // Add chess context
-    if (fen) {
-      formData.append('fen', fen);
-      formData.append('context', 'chess');
-    }
-    
-    // Use a longer timeout for audio processing
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout (reduced from 30s)
-    
     try {
-      console.log(`Sending audio to ${GEMINI_AUDIO_URL}...`);
-      const response = await fetch(GEMINI_AUDIO_URL, {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-        mode: 'cors',
-        headers: {
-          'Accept': 'application/json',
-        },
-        credentials: 'omit'
-      });
+      // If we've already determined the service isn't working, fail fast
+      if (!audioServiceWorking) {
+        throw new Error('Audio transcription service is not available');
+      }
+  
+      // Check audio size - fail early if it's empty
+      if (!audioBlob || audioBlob.size < 1000) {
+        console.error('Audio blob is too small:', audioBlob?.size || 0, 'bytes');
+        throw new Error('Audio recording is too short or empty. Please try again and speak clearly.');
+      }
+  
+      console.log(`Sending audio for transcription (${Math.round(audioBlob.size / 1024)} KB)...`);
+      const startTime = performance.now();
       
-      if (!response.ok) {
-        console.error(`Audio transcription failed with status: ${response.status}`);
-        // Mark the service as not working if we get a CORS or 5xx error
-        if (response.status === 0 || response.status >= 500) {
-          audioServiceWorking = false;
-          console.warn('Audio transcription service marked as unavailable');
+      // Create a FormData object to send the audio file
+      const formData = new FormData();
+      
+      // Make sure to use a proper filename with extension
+      formData.append('audio', audioBlob, 'recording.webm');
+      
+      // Add chess context
+      if (fen) {
+        formData.append('fen', fen);
+        formData.append('context', 'chess');
+      }
+      
+      // Use a longer timeout for audio processing
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      
+      try {
+        console.log(`Sending audio to ${GEMINI_AUDIO_URL}...`);
+        
+        // Add debugging log to view the form data
+        console.log('FormData entries:');
+        for (const pair of formData.entries()) {
+          // Don't log the actual audio content, just its existence
+          if (pair[0] === 'audio') {
+            console.log('audio: [Blob data]', pair[1].size, 'bytes');
+          } else {
+            console.log(pair[0] + ': ' + pair[1]);
+          }
         }
-        throw new Error(`Failed to transcribe audio: ${response.status} ${response.statusText}`);
+        
+        const response = await fetch(GEMINI_AUDIO_URL, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+          mode: 'cors',
+          headers: {
+            'Accept': 'application/json'
+          },
+          credentials: 'omit'
+        });
+        
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.error(`Audio transcription failed with status: ${response.status}`);
+          
+          // Try to get more detailed error information
+          let errorDetail = '';
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData.error || errorData.message || '';
+          } catch (e) {
+            // If we can't parse JSON, try to get text
+            try {
+              errorDetail = await response.text();
+            } catch (textError) {
+              errorDetail = 'Unknown error';
+            }
+          }
+          
+          // Mark the service as not working if we get a server error
+          if (response.status === 0 || response.status >= 500) {
+            audioServiceWorking = false;
+            console.warn('Audio transcription service marked as unavailable');
+          }
+          
+          throw new Error(`Failed to transcribe audio: ${response.status} ${errorDetail}`);
+        }
+        
+        const result = await response.json();
+        const processingTime = Math.round((performance.now() - startTime) / 1000);
+        
+        if (!result.transcription) {
+          console.error('No transcription in response:', result);
+          throw new Error('No transcription returned from server');
+        }
+        
+        // Service is working if we get here
+        audioServiceWorking = true;
+        console.log(`Audio transcribed in ${processingTime}s: "${result.transcription}"`);
+        
+        // If result has a geminiResponse, return both
+        if (result.geminiResponse) {
+          return {
+            transcription: result.transcription,
+            geminiResponse: result.geminiResponse
+          };
+        }
+        
+        return result.transcription;
+      } catch (error) {
+        // Make sure to clear the timeout if there's an error
+        clearTimeout(timeoutId);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      
+      // If we get a network error or CORS error, mark the service as not working
+      if (error.message.includes('Failed to fetch') || 
+          error.message.includes('NetworkError') ||
+          error.message.includes('CORS')) {
+        audioServiceWorking = false;
+        console.warn('Audio transcription service marked as unavailable due to network error');
       }
       
-      const result = await response.json();
-      const processingTime = Math.round((performance.now() - startTime) / 1000);
-      
-      if (!result.transcription) {
-        console.error('No transcription in response:', result);
-        throw new Error('No transcription returned from server');
-      }
-      
-      // Service is working if we get here
-      audioServiceWorking = true;
-      console.log(`Audio transcribed in ${processingTime}s: "${result.transcription}"`);
-      
-      return result.transcription;
-    } finally {
-      clearTimeout(timeoutId);
+      throw error;
     }
-  } catch (error) {
-    console.error('Error transcribing audio:', error);
-    
-    // If we get a network error or CORS error, mark the service as not working
-    if (error.message.includes('Failed to fetch') || 
-        error.message.includes('NetworkError') ||
-        error.message.includes('CORS')) {
-      audioServiceWorking = false;
-      console.warn('Audio transcription service marked as unavailable due to network error');
-    }
-    
-    throw new Error(`Failed to transcribe audio: ${error.message}`);
-  }
-};
+  };

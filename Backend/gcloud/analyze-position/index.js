@@ -12,6 +12,8 @@ const {
   createEndgamePrompt,
   createCheckmatePrompt,
   createGameReportPrompt,
+  createChatPrompt,
+  createGenericPrompt,
   formatBestMoves
 } = require('./player-levels');
 
