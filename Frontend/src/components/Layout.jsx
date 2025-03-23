@@ -86,30 +86,30 @@ const Layout = () => {
           </div>
           
           <div className="mt-4">
-            <div className="flex flex-wrap gap-3 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
               <button 
-                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-3 rounded transition duration-200 flex items-center gap-2"
                 onClick={() => initGame()}
               >
                 <PlusCircle size={16} />
                 New Game
               </button>
               <button 
-                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-3 rounded transition duration-200 flex items-center gap-2"
                 onClick={undoMove}
               >
                 <RotateCcw size={16} />
                 Undo Move
               </button>
               <button 
-                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-3 rounded transition duration-200 flex items-center gap-2"
                 onClick={toggleOrientation}
               >
                 <RefreshCw size={16} />
                 Flip Board
               </button>
               <button 
-                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200 flex items-center gap-2"
+                className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-3 rounded transition duration-200 flex items-center gap-2"
                 onClick={() => setShowFenInput(true)}
               >
                 <Edit size={16} />
