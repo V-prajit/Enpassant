@@ -41,21 +41,13 @@ const Layout = () => {
     setBoardOrientation(prev => prev === 'white' ? 'black' : 'white');
   };
 
-  const loadPromotionTest = () => {
-    console.log("Loading white promotion test position");
-    initGame('7k/1P6/8/8/8/8/8/K7 w - - 0 1');
-    console.log("White pawn on b7 can be promoted by moving to b8");
-  };
-
-  const loadBlackPromotionTest = () => {
-    console.log("Loading black promotion test position");
-    initGame('k7/8/8/8/8/8/1p6/K7 b - - 0 1');
-    console.log("Black pawn on b2 can be promoted by moving to b1");
-  };
-
   return (
-    <div className="max-w-[1200px] mx-auto p-5 bg-gray-100 rounded-md shadow-md">
-      <h1 className="text-4xl font-bold mb-4 text-gray-800">Chess Voice Coach</h1>
+    <div className="max-w-[1400px] mx-auto p-5 bg-gray-100 rounded-md shadow-md">
+      <h1 className="text-5xl font-extrabold tracking-tight text-gray-800 border-b-2 border-gray-300 pb-2 mb-6">
+        Enpassant
+      </h1>
+
+
       <div className="mb-2">
         <span className="font-bold text-gray-700">Current turn:</span> {turn === 'w' ? 'White' : 'Black'}
       </div>
@@ -103,18 +95,6 @@ const Layout = () => {
               onClick={() => initGame('r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3')}
             >
               Load Position
-            </button>
-            <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
-              onClick={loadPromotionTest}
-            >
-              Test White Promotion
-            </button>
-            <button 
-              className="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded transition duration-200"
-              onClick={loadBlackPromotionTest}
-            >
-              Test Black Promotion
             </button>
           </div>
         </div>
