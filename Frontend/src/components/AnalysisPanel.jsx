@@ -225,57 +225,6 @@ const AnalysisPanel = ({
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
       
-      <div className="evaluation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Evaluation</h4>
-        <div className="eval-display flex items-center">
-          <div className={`text-lg font-bold ${
-            evaluation.includes('Mate') 
-              ? evaluation.includes('Mated') ? 'text-red-600' : 'text-green-600'
-              : parseFloat(evaluation) > 0 
-                ? 'text-green-600' 
-                : parseFloat(evaluation) < 0 
-                  ? 'text-red-600' 
-                  : 'text-gray-800'
-          }`}>
-            {evaluation.includes('Mate') 
-              ? evaluation 
-              : parseFloat(evaluation) > 0 
-                ? '+' + Math.abs(parseFloat(evaluation)).toFixed(2) 
-                : parseFloat(evaluation) < 0
-                  ? '-' + Math.abs(parseFloat(evaluation)).toFixed(2)
-                  : '0.00'
-            }
-          </div>
-          
-          {isAnalyzing && (
-            <div className="ml-3 text-sm text-gray-600 flex items-center">
-              <div className="animate-spin h-4 w-4 border-2 border-green-500 rounded-full border-t-transparent mr-2"></div>
-              Analyzing...
-            </div>
-          )}
-          
-          {bestMoves.length > 0 && bestMoves[0]?.source && (
-            <div className="ml-3 text-xs text-gray-500 flex items-center">
-              {bestMoves[0].source === 'local' ? (
-                <>
-                  <span>Browser analysis at depth {bestMoves[0].depth || '?'}</span>
-                  {isAnalyzing && (
-                    <span className="ml-2 flex items-center">
-                      <div className="animate-pulse h-2 w-2 bg-blue-400 rounded-full mr-1"></div>
-                      <span className="text-blue-500">Cloud analysis in progress...</span>
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span>Cloud analysis at depth {bestMoves[0].depth || '?'}</span>
-              )}
-            </div>
-          )}
-        </div>
-        
-        {/* Vertical eval bar now shown to the left of the board */}
-      </div>
-      
       <div className="best-moves mb-6">
   <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
   {bestMoves.filter(move => move.san).length > 0 ? (
@@ -356,18 +305,7 @@ const AnalysisPanel = ({
       </div>
 
       <div className="ai-explanation mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
         <div className="controls flex flex-wrap gap-3 mb-4">
-          <button 
-            onClick={() => handleGetExplanation(false)} 
-            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
-            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
-              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
-          >
-            {isLoading ? 'Loading explanation...' : evaluation.includes('Checkmate') ? 'Get Game Report' : 'Get AI Explanation'}
-          </button>
           
           <button 
             onClick={() => handleGetExplanation(true)} 
@@ -410,17 +348,6 @@ const AnalysisPanel = ({
             <p className="text-gray-600">First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
           )}
         </div>
-      </div>
-      
-      <div className="voice-controls">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Voice Commands</h4>
-        <p className="text-gray-600 mb-2">Voice controls will be implemented in milestone 3</p>
-        <button 
-          disabled 
-          className="bg-gray-300 text-gray-500 py-2 px-4 rounded-md cursor-not-allowed shadow-sm"
-        >
-          Start Listening
-        </button>
       </div>
     </div>
   );
