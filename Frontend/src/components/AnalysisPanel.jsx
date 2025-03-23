@@ -277,55 +277,41 @@ const AnalysisPanel = ({
       </div>
       
       <div className="best-moves mb-6">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
-        {bestMoves.length > 0 ? (
-          <ul className="list-none p-0 border rounded-md divide-y shadow-sm">
-            {bestMoves.map((move, index) => (
-              <li 
-                key={index} 
-                className="py-2 px-3 cursor-pointer hover:bg-gray-100 flex items-center"
-                onClick={() => onSelectMove && onSelectMove(move)}
-              >
-                <div className="move-number mr-3 bg-green-100 text-green-800 px-2 py-1 rounded-md font-medium text-sm">
-                  {index + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="font-bold">{move.san || 'Unknown'}</div>
-                  <div className="text-xs text-gray-600">{move.uci}</div>
-                </div>
-                <div className="ml-auto">
-                  <button 
-                    className="text-sm bg-gray-800 hover:bg-gray-900 text-white px-2 py-1 rounded shadow-sm transition-all duration-200"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectMove && onSelectMove(move);
-                    }}
-                  >
-                    Play
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : isAnalyzing ? (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
-            <p className="text-gray-600">Analyzing position...</p>
-          </div>
-        ) : (
-          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-            <p className="text-gray-600 italic">No suggested moves available</p>
-            {!autoAnalyze && (
-              <button
-                onClick={() => handleAnalyze(depth)}
-                className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
-              >
-                Analyze Now
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+  <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
+  {bestMoves.filter(move => move.san).length > 0 ? (
+    <div className="flex gap-3">
+      {bestMoves.filter(move => move.san).slice(0, 5).map((move, index) => (
+        <button
+          key={index}
+          onClick={() => onSelectMove && onSelectMove(move)}
+          className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition-colors duration-200"
+        >
+          <span className="text-sm font-bold text-green-600">
+            {move.san}
+          </span>
+        </button>
+      ))}
+    </div>
+  ) : isAnalyzing ? (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
+      <p className="text-gray-600">Analyzing position...</p>
+    </div>
+  ) : (
+    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+      <p className="text-gray-600 italic">No suggested moves available</p>
+      {!autoAnalyze && (
+        <button
+          onClick={() => handleAnalyze(depth)}
+          className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
+        >
+          Analyze Now
+        </button>
+      )}
+    </div>
+  )}
+</div>
+
       
       <div className="analysis-settings mb-6">
         <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
