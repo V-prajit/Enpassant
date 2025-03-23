@@ -1,8 +1,8 @@
-# Deploying Stockfish Analysis to Google Cloud
+# Deploying Analysis Functions to Google Cloud
 
-Follow these steps to deploy the Stockfish analysis service to Google Cloud.
+Follow these steps to deploy both Stockfish and Gemini analysis services to Google Cloud.
 
-## 1. Deploy the Cloud Run Service
+## 1. Deploy the Cloud Run Service for Stockfish
 
 First, deploy the Stockfish engine to Google Cloud Run:
 
@@ -17,27 +17,43 @@ This will:
 - Create the necessary proxy function files
 - Output a service URL (make note of this)
 
-## 2. Deploy the Cloud Function
+## 2. Deploy the Cloud Functions
 
-After the Cloud Run service is deployed, deploy the Cloud Function that will act as a proxy:
+After the Cloud Run service is deployed, deploy the Cloud Functions:
 
 ```bash
 # From the repo root 
 cd Backend/gcloud/analyze-position
+
+# Deploy Stockfish analysis function
 npm run deploy-stockfish
+
+# Deploy Gemini analysis function
+gcloud functions deploy analyzeChessPosition \
+  --runtime nodejs18 \
+  --trigger-http \
+  --allow-unauthenticated
 ```
 
-## 3. Update Frontend API URL (if needed)
+## 3. Testing the Endpoints
 
-The deployed Cloud Function will be available at a URL like:
-`https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish`
+The deployed Cloud Functions will be available at URLs like:
+- `https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish`
+- `https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition`
 
-Your frontend should already be configured to use this URL, but you can double-check by looking at:
-`Frontend/src/services/api.js`
+You can test them with curl:
 
-## Testing
+```bash
+# Test Stockfish endpoint
+curl -X POST https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish \
+  -H "Content-Type: application/json" \
+  -d '{"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}'
 
-After deployment, your frontend application should be able to use the cloud-based Stockfish analysis. The analysis will now be running on Google Cloud rather than your local machine, solving the M1 Mac compatibility issue.
+# Test Gemini endpoint
+curl -X POST https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition \
+  -H "Content-Type: application/json" \
+  -d '{"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "playerLevel": "advanced"}'
+```
 
 ## Troubleshooting
 
@@ -51,11 +67,15 @@ If you encounter errors:
 2. Check the Cloud Function logs:
    ```
    gcloud functions logs read analyzeWithStockfish
+   gcloud functions logs read analyzeChessPosition
    ```
 
-3. Test the endpoint directly:
+3. Check CORS headers with an OPTIONS request:
    ```
-   curl -X POST https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish \
-     -H "Content-Type: application/json" \
-     -d '{"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"}'
+   curl -X OPTIONS -v https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition \
+     -H "Origin: http://localhost:5173" \
+     -H "Access-Control-Request-Method: POST" \
+     -H "Access-Control-Request-Headers: Content-Type"
    ```
+   
+   You should see `Access-Control-Allow-Origin: *` in the response headers.

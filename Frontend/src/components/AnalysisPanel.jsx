@@ -82,6 +82,9 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     };
   }, [fen, autoAnalyze]);
   
+  // State to track response time
+  const [responseTime, setResponseTime] = useState(null);
+  
   // Handle Gemini explanation
   const handleGetExplanation = async () => {
     if (!fen || isLoading || bestMoves.length === 0) return;
@@ -89,15 +92,25 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     setIsLoading(true);
     setError(null);
     setExplanation(''); // Clear previous explanation
+    setResponseTime(null); // Reset response time
     
     try {
       console.log(`Requesting explanation for ${playerLevel} level player`);
+      const clientStartTime = performance.now();
       
       // Make sure we're passing the correct level
       const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
       
+      const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
+      console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
+      
       if (result && result.explanation) {
         setExplanation(result.explanation);
+        
+        // If server provided response time, use it, otherwise use client-side measurement
+        const finalResponseTime = result.responseTime || clientResponseTime;
+        setResponseTime(finalResponseTime);
+        console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s`);
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
@@ -303,7 +316,14 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           {isLoading ? (
             <p className="text-gray-600 italic">Getting AI explanation...</p>
           ) : explanation ? (
-            <p>{explanation}</p>
+            <div>
+              <p>{explanation}</p>
+              {responseTime && (
+                <p className="text-xs text-gray-500 mt-2 text-right">
+                  Generated in {typeof responseTime === 'number' ? responseTime.toFixed(2) : responseTime}s
+                </p>
+              )}
+            </div>
           ) : (
             <p className="text-gray-600">First analyze the position, then click "Get AI Explanation" to receive personalized coaching.</p>
           )}

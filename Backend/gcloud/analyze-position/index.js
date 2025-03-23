@@ -19,10 +19,12 @@ exports.analyzeChessPosition = async (req, res) => {
     });
 
     const generativeModel = vertex.preview.getGenerativeModel({
-      model: 'gemini-pro',
+      model: 'gemini-2.0-flash',
       generationConfig: {
-        maxOutputTokens: 2048,
-        temperature: 0.2,
+        maxOutputTokens: 800,  // Reduced for faster responses
+        temperature: 0.1,      // Lower temperature for more concise responses
+        topP: 0.8,             // More focused sampling
+        topK: 40,              // Limit token selection
       }
     });
 
@@ -42,35 +44,61 @@ exports.analyzeChessPosition = async (req, res) => {
       moves: bestMoves ? `${bestMoves.length} moves` : 'None'
     });
 
-    const prompt = `
-    As a chess coach, explain this position to a ${validatedLevel} player:
+    // Create a shorter, more targeted prompt based on player level
+    let levelSpecificPrompt = '';
+    if (validatedLevel === 'beginner') {
+      levelSpecificPrompt = `
+      You're explaining to a BEGINNER. Be very brief:
+      1. Material balance (who has more pieces)
+      2. Basic threats or opportunities
+      3. Simple next move advice
+      Keep total response under 150 words.`;
+    } else if (validatedLevel === 'intermediate') {
+      levelSpecificPrompt = `
+      You're explaining to an INTERMEDIATE player. Be concise:
+      1. Key positional aspects
+      2. Tactical opportunities
+      3. Best plan forward
+      Keep total response under 200 words.`;
+    } else {
+      levelSpecificPrompt = `
+      You're explaining to an ADVANCED player. Focus on:
+      1. Critical positional factors
+      2. Concrete tactical variations
+      3. Strategic plan for both sides
+      Keep total response under 250 words.`;
+    }
     
+    const prompt = `
+    Chess position analysis for ${validatedLevel} player:
     FEN: ${fen}
     Stockfish evaluation: ${evaluation || 'Not available'}
-    Best moves: ${bestMoves ? JSON.stringify(bestMoves) : 'Not available'}
+    Best moves: ${bestMoves ? JSON.stringify(bestMoves).substring(0, 200) : 'Not available'}
     
-    Provide a clear explanation of:
-    1. The key features of this position
-    2. Strategic ideas for both sides
-    3. Concrete tactical opportunities if any
-    4. Simple advice for improving play at the ${validatedLevel} level
+    ${levelSpecificPrompt}
     
-    Tailor your explanation specifically for a ${validatedLevel} player. 
-    For beginner: focus on basic concepts and simple strategies.
-    For intermediate: include positional concepts and tactical patterns.
-    For advanced: provide deeper strategic analysis and calculation of lines.
+    Respond in a direct and efficient manner. No introductions or verbose explanations.
     `;
 
+    console.log('Sending prompt to Gemini...');
+    const startTime = Date.now();
+    
     const result = await generativeModel.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
+
+    const responseTime = (Date.now() - startTime) / 1000;
+    console.log(`Gemini response received in ${responseTime.toFixed(2)} seconds`);
 
     // Correctly extract text from the response
     const text = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || 
                 'Sorry, I could not analyze this position due to a technical issue.';
 
+    console.log(`Generated ${text.length} characters of analysis`);
+
     return res.status(200).json({
       explanation: text,
+      responseTime: responseTime
     });
   } catch (error) {
     console.error('Error:', error);
