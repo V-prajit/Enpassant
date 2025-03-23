@@ -40,7 +40,7 @@ gcloud run deploy $SERVICE_NAME \
   --region $REGION \
   --allow-unauthenticated \
   --memory 8Gi \
-  --cpu 4 \
+  --cpu 8 \
   --concurrency 40 \
   --timeout 300s \
   --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT_ID"

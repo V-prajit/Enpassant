@@ -642,8 +642,8 @@ function analyzePosition(fen, depth) {
     stockfish.stdin.write("uci\n");
     
     // Configure Stockfish with optimized settings
-    stockfish.stdin.write("setoption name Threads value 16\n"); 
-    stockfish.stdin.write("setoption name Hash value 512\n");
+    stockfish.stdin.write("setoption name Threads value 8\n"); 
+    stockfish.stdin.write("setoption name Hash value 128\n");
     stockfish.stdin.write("setoption name MultiPV value 1\n");
     
     // Speed optimizations

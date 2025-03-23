@@ -81,30 +81,58 @@ const AnalysisPanel = ({
 
         return;
       }
-
+      
+      // Start analysis with the specified depth
+      console.log(`Starting analysis at depth ${depth}...`);
+      
+      // Set up a progress handler for analysis updates
+      const analysisUpdateHandler = (progressResult) => {
+        if (lastAnalyzedFen.current !== fen) return;
+        
+        const analysisDepth = progressResult.depth || 0;
+        const source = progressResult.source || 'cloud';
+        
+        console.log(`Analysis update from ${source}: depth ${analysisDepth}, eval: ${progressResult.evaluation}`);
+        
+        // Always show results as they come in
+        setEvaluation(progressResult.evaluation);
+        
+        if (progressResult.bestMoves && progressResult.bestMoves.length > 0) {
+          // Make sure to copy the source and depth to each move
+          const enhancedMoves = progressResult.bestMoves.map(move => ({
+            ...move,
+            source: source,
+            depth: analysisDepth
+          }));
+          setBestMoves(enhancedMoves);
+        }
+        
+        // Consider analysis complete when:
+        // 1. We get a cloud result at or above target depth
+        // 2. We get a completed flag from either source
+        if ((source === 'cloud' && analysisDepth >= depth) || progressResult.completed) {
+          setIsAnalyzing(false);
+        }
+      };
+      
+      // Call Stockfish analysis which manages both sources
       await getStockfishAnalysis(
         fen, 
         analysisDepth,
-        (progressResult) => {
-          if (lastAnalyzedFen.current === fen) {
-            console.log(`Progressive update: depth ${progressResult.depth}, eval: ${progressResult.evaluation}`);
-            
-            setEvaluation(progressResult.evaluation);
-            
-            if (progressResult.bestMoves && progressResult.bestMoves.length > 0) {
-              setBestMoves(progressResult.bestMoves);
-            }
-            
-            if (progressResult.depth >= 18 || progressResult.completed) {
-              setIsAnalyzing(false);
-            }
-          }
-        }
+        analysisUpdateHandler
       );
     } catch (error) {
       console.error('Stockfish analysis error:', error);
       setError('Analysis unavailable. Try again or adjust depth.');
       setIsAnalyzing(false);
+    }
+    
+    // In case we need to cancel while analysis is running
+    return () => {
+      // Mark this position as no longer being analyzed
+      if (lastAnalyzedFen.current === fen) {
+        setIsAnalyzing(false);
+      }
     }
   };
   
@@ -121,11 +149,15 @@ const AnalysisPanel = ({
     if (lastAnalyzedFen.current === fen) return;
     
     // Analyze immediately for maximum speed
-    handleAnalyze();
+    const analyzeCleanup = handleAnalyze();
     
     return () => {
+      // Clean up by both clearing the timeout and calling the cleanup function from handleAnalyze
       if (analysisTimeoutRef.current) {
         clearTimeout(analysisTimeoutRef.current);
+      }
+      if (typeof analyzeCleanup === 'function') {
+        analyzeCleanup();
       }
     };
   }, [fen, autoAnalyze]);
@@ -219,6 +251,24 @@ const AnalysisPanel = ({
             <div className="ml-3 text-sm text-gray-600 flex items-center">
               <div className="animate-spin h-4 w-4 border-2 border-green-500 rounded-full border-t-transparent mr-2"></div>
               Analyzing...
+            </div>
+          )}
+          
+          {bestMoves.length > 0 && bestMoves[0]?.source && (
+            <div className="ml-3 text-xs text-gray-500 flex items-center">
+              {bestMoves[0].source === 'local' ? (
+                <>
+                  <span>Browser analysis at depth {bestMoves[0].depth || '?'}</span>
+                  {isAnalyzing && (
+                    <span className="ml-2 flex items-center">
+                      <div className="animate-pulse h-2 w-2 bg-blue-400 rounded-full mr-1"></div>
+                      <span className="text-blue-500">Cloud analysis in progress...</span>
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span>Cloud analysis at depth {bestMoves[0].depth || '?'}</span>
+              )}
             </div>
           )}
         </div>

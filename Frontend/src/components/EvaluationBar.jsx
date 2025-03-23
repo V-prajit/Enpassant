@@ -69,24 +69,28 @@ const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
       <div 
         className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center"
       >
-        {isAnalyzing ? (
-          <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-        ) : (
-          <div 
-            className={`text-xs font-bold px-1 py-1 rounded-sm ${
-              numericEval > 0 ? 'bg-white/80 text-black' :
-              numericEval < 0 ? 'bg-black/80 text-white' :
-              'bg-gray-400/80 text-gray-800'
-            }`}
-          >
-            {isCheckmate 
-              ? (isMateForWhite ? "♔" : "♚") 
-              : numericEval > 0 
-                ? "+" + Math.abs(numericEval).toFixed(1)
-                : numericEval < 0
-                  ? "-" + Math.abs(numericEval).toFixed(1)
-                  : "0.0"
-            }
+        <div 
+          className={`text-xs font-bold px-1 py-1 rounded-sm ${
+            numericEval > 0 ? 'bg-white/80 text-black' :
+            numericEval < 0 ? 'bg-black/80 text-white' :
+            'bg-gray-400/80 text-gray-800'
+          }`}
+        >
+          {isCheckmate 
+            ? (isMateForWhite ? "♔" : "♚") 
+            : numericEval > 0 
+              ? "+" + Math.abs(numericEval).toFixed(1)
+              : numericEval < 0
+                ? "-" + Math.abs(numericEval).toFixed(1)
+                : "0.0"
+          }
+        </div>
+        
+        {/* Loading indicator overlay */}
+        {isAnalyzing && (
+          <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">
+            <div className="animate-pulse h-full w-full bg-gradient-to-b from-black/10 to-white/10 absolute"></div>
+            <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
           </div>
         )}
       </div>

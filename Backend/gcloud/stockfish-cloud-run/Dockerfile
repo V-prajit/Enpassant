@@ -16,7 +16,7 @@ WORKDIR /usr/src/app
 # Use x86-64 architecture which will work on Google Cloud Run
 RUN git clone https://github.com/official-stockfish/Stockfish.git && \
     cd Stockfish/src && \
-    make -j build ARCH=x86-64 && \
+    make -j build ARCH=x86-64-avx2 && \
     cp stockfish /usr/local/bin/
 
 # Copy package.json and install dependencies

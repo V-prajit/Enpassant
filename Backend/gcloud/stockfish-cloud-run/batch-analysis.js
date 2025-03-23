@@ -288,7 +288,7 @@ async function analyzePosition(fen, depth, positionName = '', positionType = '')
     stockfish.stdin.write("uci\n");
     
     // Configure Stockfish with optimized settings for deep analysis
-    stockfish.stdin.write("setoption name Threads value 16\n"); 
+    stockfish.stdin.write("setoption name Threads value 8\n"); 
     stockfish.stdin.write("setoption name Hash value 1024\n"); // 1GB hash for deep analysis
     stockfish.stdin.write("setoption name MultiPV value 1\n");
     
