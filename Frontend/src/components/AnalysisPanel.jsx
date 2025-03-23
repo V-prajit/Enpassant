@@ -8,6 +8,7 @@ const AnalysisPanel = ({
   onEvaluationChange,
   onBestMovesChange,
   onPlayerLevelChange,
+  onAnalyzingChange,
   playerLevel: initialPlayerLevel = 'beginner'
 }) => {
   const [evaluation, setEvaluation] = useState('0.0');
@@ -34,6 +35,13 @@ const AnalysisPanel = ({
       onBestMovesChange(bestMoves);
     }
   }, [bestMoves, onBestMovesChange]);
+  
+  // Effect to update parent component with changes to isAnalyzing
+  useEffect(() => {
+    if (onAnalyzingChange) {
+      onAnalyzingChange(isAnalyzing);
+    }
+  }, [isAnalyzing, onAnalyzingChange]);
   
   // Player level is always 'advanced' now - this function is maintained 
   // for compatibility with parent components but doesn't change anything
@@ -215,29 +223,7 @@ const AnalysisPanel = ({
           )}
         </div>
         
-        {/* Visual evaluation bar (black and white like chess.com) */}
-        {!evaluation.includes('Mate') && (
-          <div className="mt-2 h-4 w-full bg-gray-200 rounded overflow-hidden flex">
-            <div 
-              className="h-full bg-black" 
-              style={{ 
-                width: `${50 - Math.min(Math.abs(parseFloat(evaluation)) * 8, 50)}%`
-              }}
-            ></div>
-            <div 
-              className="h-full bg-white border-l border-r border-gray-400" 
-              style={{ 
-                width: '0.5%'
-              }}
-            ></div>
-            <div 
-              className="h-full bg-white" 
-              style={{ 
-                width: `${Math.min(Math.abs(parseFloat(evaluation)) * 8, 50) + 49.5}%`,
-              }}
-            ></div>
-          </div>
-        )}
+        {/* Vertical eval bar now shown to the left of the board */}
       </div>
       
       <div className="best-moves mb-6">

@@ -3,6 +3,7 @@ import Chessboard from './Chessboard';
 import MoveHistory from './MoveHistory';
 import AnalysisPanel from './AnalysisPanel';
 import ChatInterface from './ChatInterface';
+import EvaluationBar from './EvaluationBar';
 import useChessGame from '../hooks/useChessGame';
 
 const Layout = () => {
@@ -21,6 +22,7 @@ const Layout = () => {
   const [boardOrientation, setBoardOrientation] = useState('white');
   const [evaluation, setEvaluation] = useState('0.0');
   const [bestMoves, setBestMoves] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleSelectMove = (move) => {
     if (move && move.uci) {
@@ -60,13 +62,22 @@ const Layout = () => {
       
       <div className="flex flex-wrap gap-5">
         <div className="flex-1 min-w-[400px]">
-          <Chessboard 
-            fen={fen} 
-            lastMove={lastMove} 
-            onMove={makeMove}
-            orientation={boardOrientation}
-            getLegalMoves={getLegalMoves}
-          />
+          <div className="flex items-start">
+            {/* Vertical evaluation bar */}
+            <EvaluationBar 
+              evaluation={evaluation} 
+              isAnalyzing={isAnalyzing}
+              orientation={boardOrientation}
+            />
+            
+            <Chessboard 
+              fen={fen} 
+              lastMove={lastMove} 
+              onMove={makeMove}
+              orientation={boardOrientation}
+              getLegalMoves={getLegalMoves}
+            />
+          </div>
           
           <div className="mt-4 flex flex-wrap gap-3">
             <button 
@@ -116,6 +127,7 @@ const Layout = () => {
               onSelectMove={handleSelectMove} 
               onEvaluationChange={setEvaluation}
               onBestMovesChange={setBestMoves}
+              onAnalyzingChange={setIsAnalyzing}
             />
             <ChatInterface 
               fen={fen} 
