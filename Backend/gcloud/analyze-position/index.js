@@ -23,28 +23,43 @@ exports.analyzeChessPosition = async (req, res) => {
       location: 'us-central1',
     });
 
+    // Determine if we should use Deep Think mode with Gemini 2.0 Pro
+    const useDeepThink = req.body.useDeepThink === true;
+    console.log(`Using ${useDeepThink ? 'Deep Think' : 'Standard'} mode`);
+    
     // Use more precise configuration for chat responses
-    const modelConfig = userQuestion 
+    const modelConfig = useDeepThink
       ? {
-          // For direct questions, use settings optimized for concise, precise answers
-          model: 'gemini-2.0-flash', // Fast model for quick responses
+          // Deep Think mode uses Gemini 2.0 Pro for more thorough analysis
+          model: 'gemini-2.0-pro-exp-02-05',
           generationConfig: {
-            maxOutputTokens: 300, // Shorter responses
-            temperature: 0.2,     // Slightly more creative but still focused
-            topP: 0.95,           // Higher topP for more focused responses
-            topK: 20,             // Lower topK for more deterministic outputs
+            maxOutputTokens: 1200, // Longer, more detailed responses
+            temperature: 0.15,     // Slightly more creative for deeper insights
+            topP: 0.9,            
+            topK: 30,
           }
         }
-      : {
-          // For general analysis, use default settings
-          model: 'gemini-2.0-flash',
-          generationConfig: {
-            maxOutputTokens: 800,
-            temperature: 0.1,
-            topP: 0.8,
-            topK: 40,
+      : userQuestion 
+        ? {
+            // For direct questions, use settings optimized for concise, precise answers
+            model: 'gemini-2.0-flash', // Fast model for quick responses
+            generationConfig: {
+              maxOutputTokens: 300, // Shorter responses
+              temperature: 0.2,     // Slightly more creative but still focused
+              topP: 0.95,           // Higher topP for more focused responses
+              topK: 20,             // Lower topK for more deterministic outputs
+            }
           }
-        };
+        : {
+            // For general analysis, use default settings
+            model: 'gemini-2.0-flash',
+            generationConfig: {
+              maxOutputTokens: 800,
+              temperature: 0.1,
+              topP: 0.8,
+              topK: 40,
+            }
+          };
     
     const generativeModel = vertex.preview.getGenerativeModel(modelConfig);
 
@@ -56,7 +71,8 @@ exports.analyzeChessPosition = async (req, res) => {
       isCheckmate, 
       checkmateWinner,
       isGameReport,
-      userQuestion
+      userQuestion,
+      useDeepThink
      } = req.body || {};
     
     if (!fen) {
@@ -80,30 +96,106 @@ exports.analyzeChessPosition = async (req, res) => {
     console.log(`Detected game phase: ${gamePhase}`);
 
     let prompt;
-    // If user has asked a specific question, use the chat prompt
-    if (userQuestion) {
-      prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase);
+    
+    // Deep Think mode adds more advanced analysis and depth to prompts
+    if (useDeepThink) {
+      // Create a more detailed prompt for deep thinking mode
+      console.log("Using Deep Think mode for enhanced analysis");
+      
+      if (userQuestion) {
+        // For questions in Deep Think mode, still use chat prompt but with enhancements
+        prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase) + `
+        
+        ## DEEP THINK MODE
+        Because Deep Think mode has been selected, please provide a significantly more in-depth and detailed analysis.
+        - Extend your analysis to consider multiple move sequences and variations
+        - Include strategic nuances and positional subtleties not covered in standard analysis
+        - Consider long-term implications of pawn structures and piece placements
+        - Draw connections to similar positions from master games when relevant
+        - Target your response to advanced players with thorough chess understanding
+        `;
+      } 
+      else if (isGameReport) {
+        prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner) + `
+        
+        ## DEEP THINK MODE
+        This is a Deep Think analysis. Please provide an exceptionally thorough game analysis:
+        - Evaluate critical moments with multiple variations
+        - Analyze subtle positional nuances
+        - Reference similar positions or ideas from master games
+        - Include concrete suggestions for improvement with detailed explanations
+        - Discuss multiple strategic pathways that could have been explored
+        `;
+      }
+      else if (isCheckmate) {
+        prompt = createCheckmatePrompt(fen, checkmateWinner, validatedLevel) + `
+        
+        ## DEEP THINK MODE
+        This is a Deep Think analysis of a checkmate position:
+        - Trace the tactical and strategic elements that led to this checkmate in greater detail
+        - Analyze multiple defensive resources that could have prevented this outcome
+        - Identify the exact move sequence where the game decisively turned
+        - Provide deeper insights into similar mating patterns from master games
+        `;
+      } 
+      else {
+        // For standard position analysis in Deep Think mode
+        let basePrompt;
+        switch (gamePhase) {
+          case 'opening':
+            basePrompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          case 'middlegame':
+            basePrompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          case 'endgame':
+            basePrompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          default:
+            basePrompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
+        }
+        
+        prompt = basePrompt + `
+        
+        ## DEEP THINK MODE
+        This is a Deep Think analysis. Please provide an exceptionally thorough position analysis:
+        - Analyze multiple candidate moves and their resulting positions
+        - Explore deep strategic themes and long-term planning
+        - Identify subtle tactical and positional motifs
+        - Discuss pawn structure implications in greater detail
+        - Provide concrete variations to illustrate key points
+        - Reference similar positions from notable games when relevant
+        - Focus on comprehensive understanding rather than brevity
+        `;
+      }
     }
-    // Otherwise, use the standard prompts
-    else if (isGameReport) {
-      prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner);
-    }
-    else if (isCheckmate) {
-      prompt = createCheckmatePrompt(fen, checkmateWinner, validatedLevel);
-    } else {
-      switch (gamePhase) {
-        case 'opening':
-          prompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
-          break;
-        case 'middlegame':
-          prompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
-          break;
-        case 'endgame':
-          prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
-          break;
-        default:
-          // Fallback to a generic prompt if phase detection fails
-          prompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
+    // Standard mode prompts (no Deep Think)
+    else {
+      // If user has asked a specific question, use the chat prompt
+      if (userQuestion) {
+        prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase);
+      }
+      // Otherwise, use the standard prompts
+      else if (isGameReport) {
+        prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner);
+      }
+      else if (isCheckmate) {
+        prompt = createCheckmatePrompt(fen, checkmateWinner, validatedLevel);
+      } else {
+        switch (gamePhase) {
+          case 'opening':
+            prompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          case 'middlegame':
+            prompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          case 'endgame':
+            prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
+            break;
+          default:
+            // Fallback to a generic prompt if phase detection fails
+            prompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
+        }
       }
     }
 
@@ -126,7 +218,9 @@ exports.analyzeChessPosition = async (req, res) => {
     return res.status(200).json({
       explanation: text,
       responseTime: responseTime,
-      gamePhase: gamePhase || 'unknown'
+      gamePhase: gamePhase || 'unknown',
+      deepThinkMode: useDeepThink === true,
+      model: useDeepThink ? 'gemini-2.0-pro-exp-02-05' : 'gemini-2.0-flash'
     });
   } catch (error) {
     console.error('Error:', error);

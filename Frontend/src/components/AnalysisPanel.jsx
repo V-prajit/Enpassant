@@ -15,10 +15,11 @@ const AnalysisPanel = ({
   const [explanation, setExplanation] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [playerLevel, setPlayerLevel] = useState(initialPlayerLevel);
+  const [playerLevel, setPlayerLevel] = useState('advanced'); // Always use advanced level
   const [error, setError] = useState(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
   const [depth, setDepth] = useState(22);
+  const [modelInfo, setModelInfo] = useState(null);
   
   // Effect to update parent component with changes to evaluation
   useEffect(() => {
@@ -34,11 +35,12 @@ const AnalysisPanel = ({
     }
   }, [bestMoves, onBestMovesChange]);
   
-  // Handle player level changes
+  // Player level is always 'advanced' now - this function is maintained 
+  // for compatibility with parent components but doesn't change anything
   const handlePlayerLevelChange = (level) => {
-    setPlayerLevel(level);
+    // No-op - player level is always 'advanced'
     if (onPlayerLevelChange) {
-      onPlayerLevelChange(level);
+      onPlayerLevelChange('advanced');
     }
   };
   
@@ -123,7 +125,7 @@ const AnalysisPanel = ({
   // State to track response time
   const [responseTime, setResponseTime] = useState(null);
   
-  const handleGetExplanation = async () => {
+  const handleGetExplanation = async (useDeepThink = false) => {
     if (!fen || isLoading) return;
    
     const isCheckmate = bestMoves.length === 1 && bestMoves[0].isCheckmate;
@@ -135,12 +137,13 @@ const AnalysisPanel = ({
     setResponseTime(null);
     
     try {
-      console.log(`Requesting explanation for ${playerLevel} level player`);
+      console.log(`Requesting explanation with ${useDeepThink ? 'Deep Think' : 'standard'} mode`);
       const clientStartTime = performance.now();
 
       const isGameReport = isCheckmate;
 
-      const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel, isGameReport);
+      // Always use advanced level for all users
+      const result = await getGeminiExplanation(fen, evaluation, bestMoves, 'advanced', isGameReport, false, null, useDeepThink);
       
       const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
       console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
@@ -150,7 +153,16 @@ const AnalysisPanel = ({
       
         const finalResponseTime = result.responseTime || clientResponseTime;
         setResponseTime(finalResponseTime);
-        console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s`);
+        
+        // Store model information if available
+        if (result.model || result.deepThinkMode !== undefined) {
+          setModelInfo({
+            model: result.model || (result.deepThinkMode ? 'gemini-2.0-pro-exp-02-05' : 'gemini-2.0-flash'),
+            deepThinkMode: result.deepThinkMode === true
+          });
+        }
+        
+        console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
@@ -163,7 +175,7 @@ const AnalysisPanel = ({
       
       setError(errorMessage);
       
-      setExplanation(`Unable to generate AI analysis for this position at ${playerLevel} level. Please try again later or select a different skill level.`);
+      setExplanation(`Unable to generate AI analysis for this position. Please try again later.`);
     } finally {
       setIsLoading(false);
     }
@@ -324,18 +336,8 @@ const AnalysisPanel = ({
       <div className="ai-explanation mb-6">
         <h4 className="text-md font-medium text-gray-700 mb-2">AI Coach Explanation</h4>
         <div className="controls flex flex-wrap gap-3 mb-4">
-          <select 
-            value={playerLevel} 
-            onChange={(e) => handlePlayerLevelChange(e.target.value)}
-            className="py-2 px-4 rounded-md border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
-          >
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-          
           <button 
-            onClick={handleGetExplanation} 
+            onClick={() => handleGetExplanation(false)} 
             disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
             className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
               ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
@@ -343,6 +345,17 @@ const AnalysisPanel = ({
                 : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
           >
             {isLoading ? 'Loading explanation...' : evaluation.includes('Checkmate') ? 'Get Game Report' : 'Get AI Explanation'}
+          </button>
+          
+          <button 
+            onClick={() => handleGetExplanation(true)} 
+            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
+            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
+              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}`}
+          >
+            {isLoading ? 'Loading explanation...' : 'Deep Think Analysis'}
           </button>
         </div>
         
@@ -361,6 +374,13 @@ const AnalysisPanel = ({
               {responseTime && (
                 <p className="text-xs text-gray-500 mt-2 text-right">
                   Generated in {typeof responseTime === 'number' ? responseTime.toFixed(2) : responseTime}s
+                  {modelInfo && (
+                    <span className="ml-2">
+                      using {modelInfo.deepThinkMode ? 
+                        <span className="text-blue-600 font-medium">Gemini Pro 2.0 (Deep Think)</span> : 
+                        <span>Gemini Flash 2.0</span>}
+                    </span>
+                  )}
                 </p>
               )}
             </div>

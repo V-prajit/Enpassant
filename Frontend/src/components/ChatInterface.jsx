@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { getGeminiExplanation } from '../services/api';
 
-const ChatInterface = ({ fen, evaluation, bestMoves, playerLevel: initialPlayerLevel }) => {
-  const [playerLevel, setPlayerLevel] = useState(initialPlayerLevel || 'beginner');
+const ChatInterface = ({ fen, evaluation, bestMoves }) => {
+  // Always use advanced level
+  const playerLevel = 'advanced';
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -304,7 +305,7 @@ You can type or use the microphone button to speak your question. For chess nota
         fen, 
         evaluation, 
         bestMoves, 
-        playerLevel,
+        'advanced', // Always use advanced level
         false, // Not a game report 
         false, // Not a checkmate report
         text // Include the user's question
@@ -413,15 +414,6 @@ You can type or use the microphone button to speak your question. For chess nota
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-semibold text-gray-900">Chess Coach Chat</h3>
-        <select 
-          value={playerLevel} 
-          onChange={(e) => setPlayerLevel(e.target.value)}
-          className="py-1 px-2 text-sm rounded-md border border-gray-300 text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        >
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="advanced">Advanced</option>
-        </select>
       </div>
       
       {/* Messages container */}

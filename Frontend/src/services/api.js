@@ -157,7 +157,7 @@ const fetchWithTimeout = async (url, options, timeout = API_TIMEOUT) => {
   }
 };
 
-export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner', isGameReport = false, isCheckmate = false, userQuestion = null) => {
+export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'advanced', isGameReport = false, isCheckmate = false, userQuestion = null, useDeepThink = false) => {
   try {
     console.log(`Getting explanation for ${playerLevel} level...`);
     const startTime = performance.now();
@@ -193,7 +193,8 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
       playerLevel,
       isCheckmate: isCheckmate,
       isGameReport: gameReportRequested,
-      checkmateWinner: checkmateWinner
+      checkmateWinner: checkmateWinner,
+      useDeepThink: useDeepThink // Add the Deep Think option
     };
     
     // Add user question to the request if provided

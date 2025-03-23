@@ -21,7 +21,6 @@ const Layout = () => {
   const [boardOrientation, setBoardOrientation] = useState('white');
   const [evaluation, setEvaluation] = useState('0.0');
   const [bestMoves, setBestMoves] = useState([]);
-  const [playerLevel, setPlayerLevel] = useState('beginner');
 
   const handleSelectMove = (move) => {
     if (move && move.uci) {
@@ -117,14 +116,11 @@ const Layout = () => {
               onSelectMove={handleSelectMove} 
               onEvaluationChange={setEvaluation}
               onBestMovesChange={setBestMoves}
-              onPlayerLevelChange={setPlayerLevel}
-              playerLevel={playerLevel}
             />
             <ChatInterface 
               fen={fen} 
               evaluation={evaluation} 
-              bestMoves={bestMoves} 
-              playerLevel={playerLevel} 
+              bestMoves={bestMoves}
             />
           </div>
         </div>
