@@ -1,8 +1,5 @@
-// Enhanced Chess Position Analyzer with specialized prompts
 const { VertexAI } = require('@google-cloud/vertexai');
 
-// Import player level configurations from player-levels.js
-// Create this file in the same directory
 const {
   playerLevelConfig,
   determineGamePhase,
@@ -11,7 +8,6 @@ const {
 } = require('./player-levels');
 
 exports.analyzeChessPosition = async (req, res) => {
-  // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   
   if (req.method === 'OPTIONS') { 
@@ -22,7 +18,6 @@ exports.analyzeChessPosition = async (req, res) => {
   }
 
   try {
-    // Initialize Vertex AI
     const vertex = new VertexAI({
       project: process.env.GOOGLE_CLOUD_PROJECT || 'tidal-hack25tex-223',
       location: 'us-central1',
@@ -38,41 +33,56 @@ exports.analyzeChessPosition = async (req, res) => {
       }
     });
 
-    const { fen, evaluation, bestMoves, playerLevel } = req.body || {};
+    const { 
+      fen, 
+      evaluation, 
+      bestMoves, 
+      playerLevel, 
+      isCheckmate, 
+      checkmateWinner,
+      isGameReport
+     } = req.body || {};
     
     if (!fen) {
       return res.status(400).json({ error: 'FEN position is required' });
     }
     
-    // Validate playerLevel and set default if invalid
     const validLevels = ['beginner', 'intermediate', 'advanced'];
     const validatedLevel = validLevels.includes(playerLevel) ? playerLevel : 'beginner';
     
     console.log(`Analyzing position for ${validatedLevel} player:`, {
       fen,
       evaluation: evaluation || 'Not provided',
-      moves: bestMoves ? `${bestMoves.length} moves` : 'None'
+      moves: bestMoves ? `${bestMoves.length} moves` : 'None',
+      isCheckmate: isCheckmate || false,
+      isGameReport: isGameReport || false
     });
 
-    // Determine the game phase (opening, middlegame, or endgame)
+    // Detect game phase first
     const gamePhase = determineGamePhase(fen);
     console.log(`Detected game phase: ${gamePhase}`);
 
-    // Create appropriate prompt based on game phase
     let prompt;
-    switch (gamePhase) {
-      case 'opening':
-        prompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
-        break;
-      case 'middlegame':
-        prompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
-        break;
-      case 'endgame':
-        prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
-        break;
-      default:
-        // Fallback to a generic prompt if phase detection fails
-        prompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
+    if (isGameReport){
+      prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner);
+    }
+    else if (isCheckmate){
+      prompt = createCheckmatePrompt(fen, checkmateWinner, validatedLevel);
+    } else {
+      switch (gamePhase) {
+        case 'opening':
+          prompt = createOpeningPrompt(fen, evaluation, bestMoves, validatedLevel);
+          break;
+        case 'middlegame':
+          prompt = createMiddlegamePrompt(fen, evaluation, bestMoves, validatedLevel);
+          break;
+        case 'endgame':
+          prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
+          break;
+        default:
+          // Fallback to a generic prompt if phase detection fails
+          prompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
+      }
     }
 
     console.log('Sending specialized prompt to Gemini...');
@@ -94,7 +104,7 @@ exports.analyzeChessPosition = async (req, res) => {
     return res.status(200).json({
       explanation: text,
       responseTime: responseTime,
-      gamePhase: gamePhase
+      gamePhase: gamePhase || 'unknown'
     });
   } catch (error) {
     console.error('Error:', error);
@@ -102,7 +112,7 @@ exports.analyzeChessPosition = async (req, res) => {
   }
 };
 
-// Function to create an endgame-specific prompt
+
 function createEndgamePrompt(fen, evaluation, bestMoves, playerLevel) {
   const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
   
@@ -151,7 +161,6 @@ function createEndgamePrompt(fen, evaluation, bestMoves, playerLevel) {
   `;
 }
 
-// Function to create a generic/fallback prompt
 function createGenericPrompt(fen, evaluation, bestMoves, playerLevel) {
   const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
   
@@ -206,4 +215,66 @@ function formatBestMoves(bestMoves) {
     const moveText = move.san || move.uci;
     return `Move ${index + 1}: ${moveText}`;
   }).join('\n');
+}
+
+function createCheckmatePrompt(fen, winner, playerLevel) {
+  const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+  
+  return `
+  You are ChessMaster, a chess coach for a ${playerLevel} player.
+  
+  Position: ${fen}
+  
+  ## CHECKMATE POSITION
+  This position is a checkmate. ${winner} has won the game.
+  
+  ## Analysis Task
+  Please explain to a ${playerLevel} player:
+  1. How the checkmate was achieved
+  2. The key tactical patterns that led to checkmate
+  3. What the losing side could have done earlier to avoid this outcome
+  4. Learning opportunities from this checkmate position
+  
+  ## Educational Focus
+  ${playerLevel === 'beginner' ? 
+    'Focus on basic concepts like piece coordination, king safety, and the importance of development. Use simple language.' : 
+    playerLevel === 'intermediate' ? 
+    'Explain the tactical patterns and strategic errors that led to the checkmate. Discuss defensive resources.' :
+    'Provide a detailed analysis of the tactical and strategic factors that led to this checkmate position, including alternative defensive ideas.'}
+  
+  Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+  ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+  `;
+}
+
+function createGameReportPrompt(fen, evaluation, bestMoves, playerLevel, isCheckmate, winner) {
+  const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+  
+  return `
+  You are ChessCoach, providing a game report for a ${playerLevel} player.
+  
+  Current Position: ${fen}
+  Game Result: ${isCheckmate ? `Checkmate - ${winner} has won the game.` : 'Game in progress'}
+  
+  ## Game Report Task
+  Please provide a comprehensive game report for a ${playerLevel} player. Include:
+  
+  1. An assessment of the final position
+  2. Key turning points in the game
+  3. Strategic and tactical lessons
+  4. Recommendations for improvement
+  
+  ## Educational Focus
+  ${playerLevel === 'beginner' ? 
+    'Focus on basic concepts like piece development, king safety, and material counting. Use simple language.' : 
+    playerLevel === 'intermediate' ? 
+    'Explain the strategic and tactical patterns that decided the game. Discuss how pawn structure influenced the result.' :
+    'Provide an in-depth analysis of the game, including key decision points, alternative approaches, and strategic themes.'}
+  
+  ## Player Guidance
+  Offer 2-3 specific tips that a ${playerLevel} player could use to improve their chess skills based on this game.
+  
+  Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+  ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+  `;
 }

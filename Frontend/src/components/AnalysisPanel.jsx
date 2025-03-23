@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
+import { Chess } from 'chess.js';
 
 const AnalysisPanel = ({ fen, onSelectMove }) => {
   const [evaluation, setEvaluation] = useState('0.0');
@@ -16,37 +17,45 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   const lastAnalyzedFen = useRef('');
   const analysisTimeoutRef = useRef(null);
   
-  // Handle progressive Stockfish analysis (chess.com style)
   const handleAnalyze = async (analysisDepth = depth) => {
     if (!fen || isAnalyzing) return;
     
-    // Save the FEN we're analyzing to avoid duplicate calls
     lastAnalyzedFen.current = fen;
     
     setIsAnalyzing(true);
     setError(null);
     
     try {
-      // Progressive analysis with callback for updates
+      const chess = new Chess(fen);
+      const isCheckmate = chess.isCheckmate()
+
+      if (isCheckmate){
+        const winner = chess.turn() === 'w' ? 'Black' : 'White';
+        setEvaluation(`Checkmate = ${winner} wins`);
+        setBestMoves([{ 
+          uci: "0000", 
+          san: "Checkmate",
+          isCheckmate: true,
+          winner: winner
+        }]);
+        setIsAnalyzing(false);
+
+        return;
+      }
+
       await getStockfishAnalysis(
         fen, 
         analysisDepth,
-        // This callback receives progressive updates as analysis deepens
         (progressResult) => {
-          // Only update if we're still analyzing the same position
           if (lastAnalyzedFen.current === fen) {
             console.log(`Progressive update: depth ${progressResult.depth}, eval: ${progressResult.evaluation}`);
             
-            // Update UI immediately with each depth increase
             setEvaluation(progressResult.evaluation);
             
-            // Only update moves if we have them
             if (progressResult.bestMoves && progressResult.bestMoves.length > 0) {
               setBestMoves(progressResult.bestMoves);
             }
             
-            // Continue showing analyzing state until we get a very deep result
-            // This gives users feedback that analysis is still improving
             if (progressResult.depth >= 18 || progressResult.completed) {
               setIsAnalyzing(false);
             }
@@ -85,29 +94,31 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
   // State to track response time
   const [responseTime, setResponseTime] = useState(null);
   
-  // Handle Gemini explanation
   const handleGetExplanation = async () => {
-    if (!fen || isLoading || bestMoves.length === 0) return;
-    
+    if (!fen || isLoading) return;
+   
+    const isCheckmate = bestMoves.length === 1 && bestMoves[0].isCheckmate;
+    if (!isCheckmate && bestMoves.length === 0) return;
+
     setIsLoading(true);
     setError(null);
-    setExplanation(''); // Clear previous explanation
-    setResponseTime(null); // Reset response time
+    setExplanation('');
+    setResponseTime(null);
     
     try {
       console.log(`Requesting explanation for ${playerLevel} level player`);
       const clientStartTime = performance.now();
-      
-      // Make sure we're passing the correct level
-      const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
+
+      const isGameReport = isCheckmate;
+
+      const result = await getGeminiExplanation(fen, evaluation, bestMoves, playerLevel, isGameReport);
       
       const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
       console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
       
       if (result && result.explanation) {
         setExplanation(result.explanation);
-        
-        // If server provided response time, use it, otherwise use client-side measurement
+      
         const finalResponseTime = result.responseTime || clientResponseTime;
         setResponseTime(finalResponseTime);
         console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s`);
@@ -117,14 +128,12 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
     } catch (error) {
       console.error('Gemini explanation error:', error);
       
-      // Display a more detailed error message for clarity
       const errorMessage = error.message.includes('AI analysis service') 
         ? error.message 
         : `Failed to get AI explanation: ${error.message}. Please try again.`;
       
       setError(errorMessage);
       
-      // Also show a fallback message in the explanation area
       setExplanation(`Unable to generate AI analysis for this position at ${playerLevel} level. Please try again later or select a different skill level.`);
     } finally {
       setIsLoading(false);
@@ -298,11 +307,13 @@ const AnalysisPanel = ({ fen, onSelectMove }) => {
           
           <button 
             onClick={handleGetExplanation} 
-            disabled={isLoading || !fen || bestMoves.length === 0}
+            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
             className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
-              ${isLoading || !fen || bestMoves.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
+              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-gray-800 hover:bg-gray-900 hover:shadow-lg focus:ring-2 focus:ring-gray-500 focus:ring-offset-2'}`}
           >
-            {isLoading ? 'Loading explanation...' : 'Get AI Explanation'}
+            {isLoading ? 'Loading explanation...' : evaluation.includes('Checkmate') ? 'Get Game Report' : 'Get AI Explanation'}
           </button>
         </div>
         

@@ -294,6 +294,69 @@ const playerLevelConfig = {
     ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
     `;
   }
+
+  function createCheckmatePrompt(fen, winner, playerLevel) {
+    const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+    
+    return `
+    You are ChessMaster, a chess coach for a ${playerLevel} player.
+    
+    Position: ${fen}
+    
+    ## CHECKMATE POSITION
+    This position is a checkmate. ${winner} has won the game.
+    
+    ## Analysis Task
+    Please explain to a ${playerLevel} player:
+    1. How the checkmate was achieved
+    2. The key tactical patterns that led to checkmate
+    3. What the losing side could have done earlier to avoid this outcome
+    4. Learning opportunities from this checkmate position
+    
+    ## Educational Focus
+    ${playerLevel === 'beginner' ? 
+      'Focus on basic concepts like piece coordination, king safety, and the importance of development. Use simple language.' : 
+      playerLevel === 'intermediate' ? 
+      'Explain the tactical patterns and strategic errors that led to the checkmate. Discuss defensive resources.' :
+      'Provide a detailed analysis of the tactical and strategic factors that led to this checkmate position, including alternative defensive ideas.'}
+    
+    Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+    ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+    `;
+  }
+
+  // Add this function to player-levels.js
+function createGameReportPrompt(fen, evaluation, bestMoves, playerLevel, isCheckmate, winner) {
+  const config = playerLevelConfig[playerLevel] || playerLevelConfig.beginner;
+  
+  return `
+  You are ChessCoach, providing a game report for a ${playerLevel} player.
+  
+  Current Position: ${fen}
+  Game Result: ${isCheckmate ? `Checkmate - ${winner} has won the game.` : 'Game in progress'}
+  
+  ## Game Report Task
+  Please provide a comprehensive game report for a ${playerLevel} player. Include:
+  
+  1. An assessment of the final position
+  2. Key turning points in the game
+  3. Strategic and tactical lessons
+  4. Recommendations for improvement
+  
+  ## Educational Focus
+  ${playerLevel === 'beginner' ? 
+    'Focus on basic concepts like piece development, king safety, and material counting. Use simple language.' : 
+    playerLevel === 'intermediate' ? 
+    'Explain the strategic and tactical patterns that decided the game. Discuss how pawn structure influenced the result.' :
+    'Provide an in-depth analysis of the game, including key decision points, alternative approaches, and strategic themes.'}
+  
+  ## Player Guidance
+  Offer 2-3 specific tips that a ${playerLevel} player could use to improve their chess skills based on this game.
+  
+  Keep your explanation instructive and appropriate for a ${playerLevel} player. Use these chess terms freely: ${config.terms.join(', ')}.
+  ${config.avoidTerms.length > 0 ? `Avoid these advanced concepts: ${config.avoidTerms.join(', ')}.` : ''}
+  `;
+}
   
   module.exports = {
     playerLevelConfig,
@@ -303,5 +366,7 @@ const playerLevelConfig = {
     createEndgamePrompt,
     createTacticalPrompt,
     createSkillLevelPrompt,
+    createCheckmatePrompt,
+    createGameReportPrompt,
     formatBestMoves
   };

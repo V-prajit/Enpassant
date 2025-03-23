@@ -1,36 +1,17 @@
-// Frontend/src/services/api.js
-
-// Cloud Function endpoints
 const GEMINI_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeChessPosition';
 const STOCKFISH_URL = 'https://us-central1-tidal-hack25tex-223.cloudfunctions.net/analyzeWithStockfish';
 
 
-// Standard timeout for API calls
-const API_TIMEOUT = 10000;  // 10 seconds
-const GEMINI_TIMEOUT = 60000;  // 60 seconds - Gemini 2.0 Pro may need more time
+const API_TIMEOUT = 10000;
+const GEMINI_TIMEOUT = 60000;
 
-// No mock data needed - we're using the real API
-
-/**
- * Simulate a network delay
- * @param {number} ms - Milliseconds to delay
- * @returns {Promise} - Promise that resolves after the delay
- */
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Get Stockfish analysis for a chess position with progressive updates
- * @param {string} fen - FEN string of the position
- * @param {number} depth - Target analysis depth
- * @param {function} onUpdate - Optional callback for receiving progressive updates
- * @returns {Promise} - Final analysis results
- */
 export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => {
   try {
     console.log(`Starting analysis with target depth ${depth}...`);
     const startTime = performance.now();
     
-    // First call to start analysis - returns quickly
     const response = await fetch(STOCKFISH_URL, {
       method: 'POST',
       headers: {
@@ -43,30 +24,25 @@ export const getStockfishAnalysis = async (fen, depth = 32, onUpdate = null) => 
       throw new Error(`Stockfish analysis failed: ${response.status} ${response.statusText}`);
     }
     
-    // Initial result comes back fast (chess.com style)
     const initialResult = await response.json();
     const initialTime = Math.round(performance.now() - startTime);
     console.log(`Initial analysis in ${initialTime}ms at depth ${initialResult.depth}`);
     
-    // If caller wants updates, provide the initial result immediately
     if (onUpdate) {
       onUpdate(initialResult);
     }
     
-    // If we already got a deep enough analysis or if nobody wants updates, we're done
     if (initialResult.depth >= depth || !onUpdate) {
       return initialResult;
     }
     
-    // Start polling for deeper analysis in the background more frequently - every 50ms
     return new Promise((resolve) => {
       let currentDepth = initialResult.depth;
       let lastResult = initialResult;
-      let maxPolls = 20; // Increase poll limit for more updates
+      let maxPolls = 20;
       
       const pollInterval = setInterval(async () => {
         try {
-          // Check for updated analysis with minimum depth requirement
           const statusUrl = `${STOCKFISH_URL.replace(/\/$/, '')}/status/${encodeURIComponent(fen)}?minDepth=${currentDepth + 1}`;
           const pollResponse = await fetch(statusUrl);
           
@@ -142,14 +118,32 @@ const fetchWithTimeout = async (url, options, timeout = API_TIMEOUT) => {
   }
 };
 
-export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
+export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'beginner', isGameReport = false) => {
   try {
     console.log(`Getting explanation for ${playerLevel} level...`);
     const startTime = performance.now();
     
-    // Create a fix for the Gemini analysis cloud function
-    // By explicitly calling the "analyzeChessPosition" function in the same project
-    // that has the working Stockfish function
+    const isCheckmate = evaluation.includes('Checkmate') || (bestMoves.length > 0 && bestMoves[0].isCheckmate);
+    const gameReportRequested = isGameReport || isCheckmate;
+
+    let checkmateWinner = null;
+    if (isCheckmate) {
+        if (evaluation.includes('Checkmate')) {
+          // Extract winner from evaluation string, if it exists and is properly formatted
+          const parts = evaluation.split('-');
+          if (parts.length > 1 && parts[1]) {
+            checkmateWinner = parts[1].trim();
+          } else {
+            checkmateWinner = "Unknown"; // Fallback if format is unexpected
+          }
+        } else if (bestMoves.length > 0 && bestMoves[0].winner) {
+          // Get winner from bestMoves
+          checkmateWinner = bestMoves[0].winner;
+        } else {
+          checkmateWinner = "Unknown"; // Default fallback
+        }
+      }
+
     const requestData = {
       method: 'POST',
       headers: {
@@ -160,15 +154,16 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
         fen,
         evaluation,
         bestMoves,
-        playerLevel
+        playerLevel,
+        isCheckmate: isCheckmate,
+        isGameReport: gameReportRequested,
+        checkmateWinner: checkmateWinner
       })
     };
     
-    // Use the same endpoint format as the stockfish one, which is working
     const fixedUrl = STOCKFISH_URL.replace('analyzeWithStockfish', 'analyzeChessPosition');
     console.log(`Attempting to use endpoint: ${fixedUrl}`);
     
-    // Use the longer timeout for Gemini 2.0 Pro
     const response = await fetchWithTimeout(fixedUrl, requestData, GEMINI_TIMEOUT);
     
     if (!response.ok) {
@@ -183,19 +178,10 @@ export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLev
   } catch (error) {
     console.error('Gemini API error:', error);
     
-    // If there was an issue, throw a clear error to display to the user
     throw new Error(`The AI analysis service is currently unavailable. Please try again later or contact support if the issue persists. (Error: ${error.message})`);
   }
 };
 
-/**
- * For backward compatibility - combines both Stockfish and Gemini in one call
- * @param {string} fen - FEN string
- * @param {string} evaluation - Stockfish evaluation
- * @param {Array} bestMoves - Best moves
- * @param {string} playerLevel - Skill level
- * @returns {Promise} - Analysis with explanation
- */
 export const getAnalysis = async (fen, evaluation, bestMoves, playerLevel = 'beginner') => {
   return getGeminiExplanation(fen, evaluation, bestMoves, playerLevel);
 };
