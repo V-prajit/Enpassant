@@ -1,42 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
+  const [displayEval, setDisplayEval] = useState(evaluation || '0.0');
+  
+  useEffect(() => {
+    if (evaluation) {
+      setDisplayEval(evaluation);
+    }
+  }, [evaluation]);
+  
   let numericEval = 0;
   let mateNumber = null;
   let isGameOver = false;
-  let isMateForWhite = true; // default: assume white wins
+  let isMateForWhite = true;
 
-  if (typeof evaluation === 'string') {
-    const lowerEval = evaluation.toLowerCase().trim();
+  if (typeof displayEval === 'string') {
+    const lowerEval = displayEval.toLowerCase().trim();
     
-    // Determine winning side if explicitly mentioned.
     if (lowerEval.includes('black')) {
       isMateForWhite = false;
     } else if (lowerEval.includes('white')) {
       isMateForWhite = true;
     }
     
-    // Check if it's an immediate checkmate (no move count)
     const hasDigit = /\d/.test(lowerEval);
     if (lowerEval.includes('checkmate') && !hasDigit) {
       isGameOver = true;
     } else {
-      // Match patterns like "mate in 1", "mates in 1", or "M1"
       const mateMatch = lowerEval.match(/(?:mate(?:s)?(?: in)?\s*|m)(\d+)/i);
       if (mateMatch) {
         mateNumber = parseInt(mateMatch[1], 10);
+        if (!isMateForWhite) {
+          mateNumber = -mateNumber;
+        }
       } else {
-        numericEval = parseFloat(evaluation) || 0;
+        if (lowerEval.startsWith('+')) {
+          numericEval = parseFloat(lowerEval.slice(1)) || 0;
+        } else if (lowerEval.startsWith('-')) {
+          numericEval = parseFloat(lowerEval) || 0;
+        } else {
+          numericEval = parseFloat(lowerEval) || 0;
+        }
       }
     }
-  } else if (typeof evaluation === 'number') {
-    numericEval = evaluation;
+  } else if (typeof displayEval === 'number') {
+    numericEval = displayEval;
+  }
+  
+  if (mateNumber !== null) {
+    isMateForWhite = mateNumber > 0;
   }
 
-  // Determine the text to display
   let displayText = '';
   if (mateNumber !== null) {
-    displayText = `M${mateNumber}`;
+    displayText = `M${Math.abs(mateNumber)}`;
   } else if (isGameOver) {
     displayText = isMateForWhite ? "♔" : "♚";
   } else {
@@ -49,16 +66,16 @@ const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
     }
   }
 
-  // Calculate the bar's percentages.
   let blackPercentage = 50;
   if (mateNumber !== null || isGameOver) {
     blackPercentage = isMateForWhite ? 0 : 100;
   } else {
-    const evalPercentage = Math.min(Math.abs(numericEval) * 5, 100) / 2; // 5% per pawn, capped at 50%
+    // Scaling formula: 5% of bar per pawn advantage, max 50%
+    // This creates a non-linear scale that's more visually useful
+    const evalPercentage = Math.min(Math.abs(numericEval) * 5, 100) / 2;
     blackPercentage = numericEval >= 0 ? 50 - evalPercentage : 50 + evalPercentage;
   }
 
-  // Choose text background styling based on evaluation
   const displayClass =
     (mateNumber !== null || isGameOver)
       ? (isMateForWhite ? 'bg-white/80 text-black' : 'bg-black/80 text-white')
@@ -68,7 +85,6 @@ const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
             ? 'bg-black/80 text-white'
             : 'bg-gray-400/80 text-gray-800');
 
-  // Orientation: if orientation is 'white', white is at bottom.
   const isWhiteBottom = orientation === 'white';
 
   return (
@@ -128,6 +144,7 @@ const EvaluationBar = ({ evaluation, isAnalyzing, orientation = 'white' }) => {
         <div className={`text-xs font-bold px-1 py-1 rounded-sm ${displayClass}`}>
           {displayText}
         </div>
+        
         {/* Loading indicator overlay */}
         {isAnalyzing && (
           <div className="absolute top-0 left-0 right-0 bottom-0 flex items-center justify-center">

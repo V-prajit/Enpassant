@@ -1,72 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getStockfishAnalysis, getGeminiExplanation } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { getStockfishAnalysis, getGeminiExplanation, stopSpeech } from '../services/api';
 import { Chess } from 'chess.js';
-import { speakText, prepareAnalysisForSpeech, stopSpeech } from '../utils/speechSynthesis';
+import CONFIG from '../config';
 
 const AnalysisPanel = ({ 
   fen, 
   onSelectMove, 
   onEvaluationChange,
   onBestMovesChange,
-  onPlayerLevelChange,
   onAnalyzingChange,
-  playerLevel: initialPlayerLevel = 'beginner'
 }) => {
   const [evaluation, setEvaluation] = useState('0.0');
   const [bestMoves, setBestMoves] = useState([]);
   const [explanation, setExplanation] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [playerLevel, setPlayerLevel] = useState('advanced'); // Always use advanced level
   const [error, setError] = useState(null);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
-  const [depth, setDepth] = useState(22);
+  const [depth, setDepth] = useState(CONFIG.ANALYSIS.defaultDepth);
   const [modelInfo, setModelInfo] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechRate, setSpeechRate] = useState(1.0);
-  const [autoSpeak, setAutoSpeak] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(CONFIG.SPEECH.defaultAutoSpeak);
   
-  // Effect to update parent component with changes to evaluation
   useEffect(() => {
     if (onEvaluationChange) {
       onEvaluationChange(evaluation);
     }
   }, [evaluation, onEvaluationChange]);
   
-  // Effect to update parent component with changes to bestMoves
   useEffect(() => {
     if (onBestMovesChange) {
       onBestMovesChange(bestMoves);
     }
   }, [bestMoves, onBestMovesChange]);
   
-  // Effect to update parent component with changes to isAnalyzing
   useEffect(() => {
     if (onAnalyzingChange) {
       onAnalyzingChange(isAnalyzing);
     }
   }, [isAnalyzing, onAnalyzingChange]);
   
-  // Cleanup speech synthesis when component unmounts
   useEffect(() => {
     return () => {
-      // Cancel any ongoing speech when component unmounts
       stopSpeech();
     };
   }, []);
   
-  // Player level is always 'advanced' now - this function is maintained 
-  // for compatibility with parent components but doesn't change anything
-  const handlePlayerLevelChange = (level) => {
-    // No-op - player level is always 'advanced'
-    if (onPlayerLevelChange) {
-      onPlayerLevelChange('advanced');
-    }
-  };
-  
-  // Use refs to track the latest state for use in effect dependencies
-  const lastAnalyzedFen = useRef('');
-  const analysisTimeoutRef = useRef(null);
+  const lastAnalyzedFen = React.useRef('');
+  const analysisTimeoutRef = React.useRef(null);
   
   const handleAnalyze = async (analysisDepth = depth) => {
     if (!fen || isAnalyzing) return;
@@ -78,9 +59,9 @@ const AnalysisPanel = ({
     
     try {
       const chess = new Chess(fen);
-      const isCheckmate = chess.isCheckmate()
+      const isCheckmate = chess.isCheckmate();
 
-      if (isCheckmate){
+      if (isCheckmate) {
         const winner = chess.turn() === 'w' ? 'Black' : 'White';
         setEvaluation(`Checkmate = ${winner} wins`);
         setBestMoves([{ 
@@ -90,19 +71,18 @@ const AnalysisPanel = ({
           winner: winner
         }]);
         setIsAnalyzing(false);
-
         return;
       }
       
       // Start analysis with the specified depth
-      console.log(`Starting analysis at depth ${depth}...`);
+      console.log(`Starting analysis at depth ${analysisDepth}...`);
       
       // Set up a progress handler for analysis updates
       const analysisUpdateHandler = (progressResult) => {
         if (lastAnalyzedFen.current !== fen) return;
         
         const analysisDepth = progressResult.depth || 0;
-        const source = progressResult.source || 'cloud';
+        const source = progressResult.source || 'local';
         
         console.log(`Analysis update from ${source}: depth ${analysisDepth}, eval: ${progressResult.evaluation}`);
         
@@ -120,14 +100,14 @@ const AnalysisPanel = ({
         }
         
         // Consider analysis complete when:
-        // 1. We get a cloud result at or above target depth
-        // 2. We get a completed flag from either source
-        if ((source === 'cloud' && analysisDepth >= depth) || progressResult.completed) {
+        // 1. We get a result at or above target depth
+        // 2. We get a completed flag
+        if (analysisDepth >= analysisDepth || progressResult.completed) {
           setIsAnalyzing(false);
         }
       };
       
-      // Call Stockfish analysis which manages both sources
+      // Call Stockfish analysis
       await getStockfishAnalysis(
         fen, 
         analysisDepth,
@@ -137,14 +117,6 @@ const AnalysisPanel = ({
       console.error('Stockfish analysis error:', error);
       setError('Analysis unavailable. Try again or adjust depth.');
       setIsAnalyzing(false);
-    }
-    
-    // In case we need to cancel while analysis is running
-    return () => {
-      // Mark this position as no longer being analyzed
-      if (lastAnalyzedFen.current === fen) {
-        setIsAnalyzing(false);
-      }
     }
   };
   
@@ -160,16 +132,15 @@ const AnalysisPanel = ({
     // Don't analyze if we've already analyzed this position
     if (lastAnalyzedFen.current === fen) return;
     
-    // Analyze immediately for maximum speed
-    const analyzeCleanup = handleAnalyze();
+    // Set a short delay before analyzing to avoid rapid repeated analysis
+    analysisTimeoutRef.current = setTimeout(() => {
+      handleAnalyze();
+    }, CONFIG.ANALYSIS.analysisDelay);
     
     return () => {
-      // Clean up by both clearing the timeout and calling the cleanup function from handleAnalyze
+      // Clean up by clearing the timeout
       if (analysisTimeoutRef.current) {
         clearTimeout(analysisTimeoutRef.current);
-      }
-      if (typeof analyzeCleanup === 'function') {
-        analyzeCleanup();
       }
     };
   }, [fen, autoAnalyze]);
@@ -194,8 +165,17 @@ const AnalysisPanel = ({
 
       const isGameReport = isCheckmate;
 
-      // Always use advanced level for all users
-      const result = await getGeminiExplanation(fen, evaluation, bestMoves, 'advanced', isGameReport, false, null, useDeepThink);
+      // Always use advanced level
+      const result = await getGeminiExplanation(
+        fen, 
+        evaluation, 
+        bestMoves, 
+        CONFIG.defaultPlayerLevel, 
+        isGameReport, 
+        false, 
+        null, 
+        useDeepThink
+      );
       
       const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
       console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
@@ -209,17 +189,12 @@ const AnalysisPanel = ({
         // Store model information if available
         if (result.model || result.deepThinkMode !== undefined) {
           setModelInfo({
-            model: result.model || (result.deepThinkMode ? 'gemini-2.0-pro-exp-02-05' : 'gemini-2.0-flash'),
+            model: result.model || (result.deepThinkMode ? 'gemini-2.0-pro' : 'gemini-2.0-flash'),
             deepThinkMode: result.deepThinkMode === true
           });
         }
         
         console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
-        
-        // Automatically speak the explanation if autoSpeak is enabled
-        if (autoSpeak) {
-          handleSpeak(result.explanation);
-        }
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
@@ -237,99 +212,46 @@ const AnalysisPanel = ({
       setIsLoading(false);
     }
   };
-  
-  // Handle speaking the analysis out loud
-  const handleSpeak = async (textToSpeak = explanation) => {
-    if (!textToSpeak) return;
-    
-    try {
-      // Stop any ongoing speech
-      if (isSpeaking) {
-        stopSpeech();
-        setIsSpeaking(false);
-        return;
-      }
-      
-      // Process the text for better speech output
-      const processedText = prepareAnalysisForSpeech(textToSpeak);
-      
-      setIsSpeaking(true);
-      
-      await speakText(processedText, {
-        rate: speechRate,
-        onStart: () => setIsSpeaking(true),
-        onEnd: () => setIsSpeaking(false),
-        onError: (error) => {
-          console.error("Speech synthesis error:", error);
-          setIsSpeaking(false);
-          setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
-        }
-      });
-    } catch (error) {
-      console.error("Failed to speak analysis:", error);
-      setIsSpeaking(false);
-      setError("Failed to use speech synthesis. Please check if your browser supports this feature.");
-    }
-  };
-  
-  // Handle speaking evaluation and best moves
-  const handleSpeakEvaluation = () => {
-    if (!bestMoves || bestMoves.length === 0) return;
-    
-    // Prepare a spoken version of the evaluation and best moves
-    let evalSpeech = `The position evaluation is ${evaluation}. `;
-    
-    if (bestMoves && bestMoves.length > 0) {
-      evalSpeech += `The best move is ${bestMoves[0].san || bestMoves[0].uci}. `;
-      
-      if (bestMoves.length > 1) {
-        evalSpeech += `Alternative moves include ${bestMoves.slice(1, 3).map(move => move.san || move.uci).join(' and ')}.`;
-      }
-    }
-    
-    handleSpeak(evalSpeech);
-  };
 
   return (
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-6 transition-all duration-300 hover:shadow-lg">
       <h3 className="text-xl font-semibold text-gray-900 mb-4">Position Analysis</h3>
       
       <div className="best-moves mb-6">
-  <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
-  {bestMoves.filter(move => move.san).length > 0 ? (
-    <div className="flex gap-3">
-      {bestMoves.filter(move => move.san).slice(0, 5).map((move, index) => (
-        <button
-          key={index}
-          onClick={() => onSelectMove && onSelectMove(move)}
-          className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition-colors duration-200"
-        >
-          <span className="text-sm font-bold text-green-600">
-            {move.san}
-          </span>
-        </button>
-      ))}
-    </div>
-  ) : isAnalyzing ? (
-    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-      <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
-      <p className="text-gray-600">Analyzing position...</p>
-    </div>
-  ) : (
-    <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
-      <p className="text-gray-600 italic">No suggested moves available</p>
-      {!autoAnalyze && (
-        <button
-          onClick={() => handleAnalyze(depth)}
-          className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
-        >
-          Analyze Now
-        </button>
-      )}
-    </div>
-  )}
-</div>
-
+        <h4 className="text-md font-medium text-gray-700 mb-2">Suggested Moves</h4>
+        {bestMoves.filter(move => move.san || move.uci).length > 0 ? (
+          <div className="flex gap-3">
+            {bestMoves.filter(move => move.san || move.uci).slice(0, 5).map((move, index) => (
+              <button
+                key={index}
+                onClick={() => onSelectMove && onSelectMove(move)}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-100 transition-colors duration-200"
+              >
+                <span className="text-sm font-bold text-green-600">
+                  {move.san || move.uci}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : isAnalyzing ? (
+          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+            <div className="animate-spin h-6 w-6 border-2 border-gray-500 rounded-full border-t-transparent mx-auto mb-2"></div>
+            <p className="text-gray-600">Analyzing position...</p>
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-50 text-center rounded-md shadow-sm">
+            <p className="text-gray-600 italic">No suggested moves available</p>
+            {!autoAnalyze && (
+              <button
+                onClick={() => handleAnalyze(depth)}
+                className="mt-2 text-sm bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded shadow-sm transition-all duration-200"
+              >
+                Analyze Now
+              </button>
+            )}
+          </div>
+        )}
+      </div>
       
       <div className="analysis-settings mb-6">
         <h4 className="text-md font-medium text-gray-700 mb-2">Analysis Settings</h4>
@@ -357,7 +279,6 @@ const AnalysisPanel = ({
               <option value="18">18 (Balanced)</option>
               <option value="22">22 (Strong)</option>
               <option value="26">26 (Deeper)</option>
-              <option value="32">32 (Maximum)</option>
             </select>
           </div>
           
@@ -375,6 +296,16 @@ const AnalysisPanel = ({
 
       <div className="ai-explanation mb-6">
         <div className="controls flex flex-wrap gap-3 mb-4">
+          <button 
+            onClick={() => handleGetExplanation(false)} 
+            disabled={isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate'))}
+            className={`py-2 px-4 rounded-md font-medium text-white transition-all duration-200 shadow-md
+              ${isLoading || !fen || (bestMoves.length === 0 && !evaluation.includes('Checkmate')) 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}`}
+          >
+            {isLoading ? 'Loading...' : 'Get AI Explanation'}
+          </button>
           
           <button 
             onClick={() => handleGetExplanation(true)} 
@@ -384,7 +315,7 @@ const AnalysisPanel = ({
                 ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'}`}
           >
-            {isLoading ? 'Loading explanation...' : 'Deep Think Analysis'}
+            {isLoading ? 'Loading...' : 'Deep Think Analysis'}
           </button>
         </div>
         
@@ -406,8 +337,8 @@ const AnalysisPanel = ({
                   {modelInfo && (
                     <span className="ml-2">
                       using {modelInfo.deepThinkMode ? 
-                        <span className="text-blue-600 font-medium">Gemini Pro 2.0 (Deep Think)</span> : 
-                        <span>Gemini Flash 2.0</span>}
+                        <span className="text-blue-600 font-medium">Gemini Pro (Deep Think)</span> : 
+                        <span>Gemini Flash</span>}
                     </span>
                   )}
                 </p>
