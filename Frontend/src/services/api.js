@@ -1,222 +1,219 @@
-// Simple Stockfish integration
+// File: Enpassant/Frontend/src/services/api.js
+
 let stockfishWorker = null;
 let stockfishReady = false;
-let currentOnUpdate = null;
-let currentFen = null;
-let currentLocalDepth = 0;
-let currentLocalEvaluation = null;
-let currentLocalMoves = [];
+let currentOnUpdate = null; // Callback for analysis updates
+let currentAnalysisResolver = null; // To resolve the promise from getStockfishAnalysis
 
-// Speech synthesis
-export const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+// Variables to hold the latest parsed info from Stockfish
+let currentLocalDepth = 0;
+let currentLocalEvaluation = '0.0';
+let currentLocalMoves = []; // Array of move objects { uci, san, score, etc. }
 
 function initLocalStockfish() {
-  if (stockfishWorker) return;
+  if (stockfishWorker) {
+    // If worker exists, ensure it's ready or re-check
+    if (!stockfishReady) {
+      stockfishWorker.postMessage('isready');
+    }
+    return;
+  }
   
   try {
-    stockfishWorker = new Worker('/stockfish-worker.js');
-    
-    stockfishWorker.onmessage = (e) => {
-      const message = e.data;
-      
-      if (message.includes('bestmove')) {
-        const parts = message.split(' ');
-        const bestMove = parts[1];
-        
-        if (currentOnUpdate && currentFen) {
-          currentOnUpdate({
-            evaluation: currentLocalEvaluation || '0.0',
-            bestMoves: currentLocalMoves || [],
-            depth: currentLocalDepth,
-            source: 'local',
-            completed: true
-          });
+    // IMPORTANT: Use the Stockfish JS file directly as the worker
+    // Ensure 'stockfish-nnue-16-single.js' is in your /public folder
+    stockfishWorker = new Worker('/stockfish-nnue-16-single.js'); // <--- MODIFIED HERE
+
+    stockfishWorker.onmessage = (event) => {
+      const message = event.data;
+      // console.log("SF_MSG:", message); // For debugging raw messages
+
+      if (typeof message === 'string') {
+        if (message.includes('uciok') || message.includes('readyok')) {
+          if (!stockfishReady) {
+            console.log('Stockfish engine is ready (uciok/readyok received).');
+            stockfishReady = true;
+          }
+        } else if (message.startsWith('info')) {
+          parseStockfishInfo(message); // Parse info strings
+          if (currentOnUpdate && currentLocalDepth > 0) { // Send updates if depth is meaningful
+            currentOnUpdate({
+              evaluation: currentLocalEvaluation,
+              bestMoves: currentLocalMoves.slice(0, 5), // Send top 5 moves for updates
+              depth: currentLocalDepth,
+              source: 'local',
+              completed: false // This is an intermediate update
+            });
+          }
+        } else if (message.startsWith('bestmove')) {
+          parseStockfishBestmove(message); // Parse bestmove
+          if (currentOnUpdate) {
+            currentOnUpdate({
+              evaluation: currentLocalEvaluation,
+              bestMoves: currentLocalMoves.slice(0, 5),
+              depth: currentLocalDepth, // Should be the final depth
+              source: 'local',
+              completed: true
+            });
+          }
+          if (currentAnalysisResolver) {
+            currentAnalysisResolver({ // Resolve the main promise
+              evaluation: currentLocalEvaluation,
+              bestMoves: currentLocalMoves,
+              depth: currentLocalDepth,
+              source: 'local',
+              completed: true
+            });
+            currentAnalysisResolver = null; // Reset resolver
+          }
+          stockfishReady = true; // Ready for next command
         }
-      } else if (message.includes('info') && message.includes('depth') && message.includes('score')) {
-        handleStockfishInfo(message);
-      } else if (message.includes('initialized')) {
-        console.log('Stockfish engine loaded:', message);
-        stockfishReady = true;
       }
     };
-    
+
     stockfishWorker.onerror = (error) => {
       console.error('Stockfish worker error:', error);
       stockfishReady = false;
+      if (currentAnalysisResolver) {
+        currentAnalysisResolver.reject(new Error('Stockfish worker error'));
+        currentAnalysisResolver = null;
+      }
+      // Optionally try to re-initialize or notify the user
     };
     
+    console.log('Local Stockfish engine (direct worker) initializing...');
     stockfishWorker.postMessage('uci');
     stockfishWorker.postMessage('isready');
-    
-    console.log('Local Stockfish engine initializing...');
+
   } catch (error) {
-    console.error('Failed to initialize local Stockfish:', error);
+    console.error('Failed to initialize local Stockfish worker:', error);
     stockfishReady = false;
   }
 }
 
-function handleStockfishInfo(info) {
-  try {
-    const depthMatch = info.match(/depth (\d+)/);
-    if (depthMatch) {
-      currentLocalDepth = parseInt(depthMatch[1], 10);
+function parseStockfishInfo(infoString) {
+  const depthMatch = infoString.match(/depth (\d+)/);
+  if (depthMatch) currentLocalDepth = parseInt(depthMatch[1], 10);
+
+  if (infoString.includes(' score cp ')) {
+    const scoreMatch = infoString.match(/score cp ([-\d]+)/);
+    if (scoreMatch) currentLocalEvaluation = (parseInt(scoreMatch[1], 10) / 100).toFixed(2).toString();
+  } else if (infoString.includes(' score mate ')) {
+    const mateMatch = infoString.match(/score mate ([-\d]+)/);
+    if (mateMatch) {
+      const mateVal = parseInt(mateMatch[1], 10);
+      currentLocalEvaluation = mateVal > 0 ? `Mate in ${mateVal}` : `Mated in ${Math.abs(mateVal)}`;
     }
-    
-    if (info.includes('score cp')) {
-      const scoreMatch = info.match(/score cp ([-\d]+)/);
-      if (scoreMatch) {
-        currentLocalEvaluation = (parseInt(scoreMatch[1], 10) / 100).toString();
-      }
-    } else if (info.includes('score mate')) {
-      const mateMatch = info.match(/score mate ([-\d]+)/);
-      if (mateMatch) {
-        currentLocalEvaluation = `Mate in ${mateMatch[1]}`;
-      }
+  }
+
+  if (infoString.includes(' pv ')) {
+    const pvMatch = infoString.match(/ pv (.+?)($| (?:multipv|info|nodes|nps|tbhits|wdl|hashfull|currmove|currmovenumber|cpuload|string))/);
+    if (pvMatch && pvMatch[1]) {
+      const moves = pvMatch[1].trim().split(' ');
+      // For simplicity, we'll just store UCI moves. SAN conversion can happen in UI if needed with chess.js
+      currentLocalMoves = moves.map(uci => ({ uci: uci, san: uci })); // Placeholder for SAN
     }
-    
-    if (info.includes(' pv ')) {
-      const pvMatch = info.match(/ pv (.+?)($| info)/);
-      if (pvMatch) {
-        const moves = pvMatch[1].trim().split(' ');
-        const bestMove = moves[0];
-        
-        currentLocalMoves = [{
-          uci: bestMove,
-          pv: moves.join(' '),
-          evaluation: currentLocalEvaluation,
-          source: 'local'
-        }];
-      }
-    }
-    
-    if (currentOnUpdate && currentFen && currentLocalDepth >= 8) {
-      currentOnUpdate({
-        evaluation: currentLocalEvaluation,
-        bestMoves: currentLocalMoves,
-        depth: currentLocalDepth,
-        source: 'local',
-        completed: false
-      });
-    }
-  } catch (error) {
-    console.error('Error parsing Stockfish info:', error);
   }
 }
 
-function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
-  return new Promise((resolve) => {
-    if (!stockfishReady) {
-      initLocalStockfish();
-      
-      setTimeout(() => {
-        if (!stockfishReady) {
-          console.warn("Stockfish not ready after initialization attempt");
-          resolve({
-            evaluation: '0.0',
-            bestMoves: [],
-            depth: 0,
-            source: 'local',
-            completed: true
-          });
-        } else {
-          analyzeWithLocalStockfish(fen, depth, onUpdate)
-            .then(resolve);
+function parseStockfishBestmove(bestmoveString) {
+    const parts = bestmoveString.split(' ');
+    if (parts.length >= 2 && parts[0] === 'bestmove') {
+        const bestMoveUci = parts[1];
+        // Ensure this best move is at the top of currentLocalMoves or add it
+        if (!currentLocalMoves.find(m => m.uci === bestMoveUci)) {
+            currentLocalMoves.unshift({ uci: bestMoveUci, san: bestMoveUci });
         }
-      }, 1000);
+    }
+}
+
+
+function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
+  return new Promise((resolve, reject) => {
+    if (!stockfishWorker || !stockfishReady) {
+      initLocalStockfish(); // Initialize if not already
+
+      let attempts = 0;
+      const maxAttempts = 50; // Wait up to 5 seconds
+      const checkReadyInterval = setInterval(() => {
+        attempts++;
+        if (stockfishReady) {
+          clearInterval(checkReadyInterval);
+          currentOnUpdate = onUpdate;
+          currentAnalysisResolver = { resolve, reject }; // Store resolver
+          currentLocalDepth = 0;
+          currentLocalEvaluation = '0.0';
+          currentLocalMoves = [];
+          
+          stockfishWorker.postMessage('stop'); // Stop any previous search
+          stockfishWorker.postMessage('ucinewgame');
+          stockfishWorker.postMessage('position fen ' + fen);
+          stockfishWorker.postMessage('go depth ' + depth);
+        } else if (attempts > maxAttempts) {
+          clearInterval(checkReadyInterval);
+          console.warn("Stockfish not ready after initialization attempt and timeout.");
+          reject(new Error("Stockfish engine timed out during initialization."));
+        }
+      }, 100);
       return;
     }
-    
+
+    // If already ready
     currentOnUpdate = onUpdate;
-    currentFen = fen;
+    currentAnalysisResolver = { resolve, reject }; // Store resolver
     currentLocalDepth = 0;
     currentLocalEvaluation = '0.0';
     currentLocalMoves = [];
     
     stockfishWorker.postMessage('stop');
+    stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
     stockfishWorker.postMessage('go depth ' + depth);
-    
-    setTimeout(() => {
-      resolve({
-        evaluation: currentLocalEvaluation || '0.0',
-        bestMoves: currentLocalMoves || [],
-        depth: currentLocalDepth,
-        source: 'local',
-        completed: currentLocalDepth >= depth
-      });
-    }, 300);
   });
 }
 
+// This should be called when your application loads to initialize Stockfish early.
+// For example, in your main App.jsx or Layout.jsx useEffect hook.
+// initLocalStockfish(); 
+
+
+// Your existing getStockfishAnalysis function that calls analyzeWithLocalStockfish
 export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => {
+  console.log(`Requesting local Stockfish analysis for FEN: ${fen} at depth ${depth}...`);
   try {
-    console.log(`Starting analysis with target depth ${depth}...`);
-    const startTime = performance.now();
-    
-    console.log('Starting local Stockfish analysis...');
-    const localResult = await analyzeWithLocalStockfish(fen, depth, onUpdate);
-    
-    console.log(`Analysis completed in ${((performance.now() - startTime) / 1000).toFixed(2)}s`);
-    return localResult;
+    // Ensure Stockfish is initialized (it will only truly init once)
+    if (!stockfishWorker) {
+        initLocalStockfish();
+    }
+    const result = await analyzeWithLocalStockfish(fen, depth, onUpdate);
+    console.log(`Local Stockfish analysis completed. Depth: ${result.depth}, Eval: ${result.evaluation}`);
+    return result;
   } catch (error) {
-    console.error('Analysis error:', error);
-    throw error;
+    console.error('Error in getStockfishAnalysis:', error);
+    // Return a structure indicating failure but allowing UI to handle it
+    return {
+      evaluation: 'Error',
+      bestMoves: [],
+      depth: 0,
+      source: 'local',
+      completed: true,
+      error: error.message
+    };
   }
 };
+
+
+// The rest of your api.js:
+// getGeminiExplanation, prepareAnalysisForSpeech, speakText, stopSpeech
 
 export const getGeminiExplanation = async (fen, evaluation, bestMoves) => {
   return {
-    explanation: createLocalExplanation(fen, evaluation, bestMoves),
+    explanation: `Local explanation for ${fen}. Evaluation: ${evaluation}. Best moves: ${JSON.stringify(bestMoves)}`,
     responseTime: 0.1,
-    model: 'offline'
+    model: 'offline-mock'
   };
 };
-
-function createLocalExplanation(fen, evaluation, bestMoves) {
-  const fenParts = fen.split(' ');
-  const turn = fenParts[1] === 'w' ? 'White' : 'Black';
-  
-  let evalText = '';
-  if (evaluation) {
-    try {
-      const evalValue = parseFloat(evaluation);
-      if (!isNaN(evalValue)) {
-        if (evalValue > 0.5) {
-          evalText = `White has an advantage of about ${Math.abs(evalValue).toFixed(1)} pawns`;
-        } else if (evalValue < -0.5) {
-          evalText = `Black has an advantage of about ${Math.abs(evalValue).toFixed(1)} pawns`;
-        } else {
-          evalText = 'The position is roughly equal';
-        }
-      } else if (evaluation.includes('Mate')) {
-        evalText = `There is a forced mate sequence`;
-      }
-    } catch (e) {
-      // Ignore parsing errors
-    }
-  }
-  
-  let explanation = `Position Analysis:\n\n`;
-  explanation += `It's ${turn}'s turn to move. `;
-  
-  if (evalText) {
-    explanation += `${evalText}. `;
-  }
-  
-  if (bestMoves && bestMoves.length > 0) {
-    const bestMove = bestMoves[0].san || bestMoves[0].uci;
-    explanation += `\n\nThe engine suggests ${bestMove} as the best move. `;
-    
-    if (bestMoves.length > 1) {
-      const alternativeMoves = bestMoves.slice(1, 3).map(move => move.san || move.uci).join(' or ');
-      explanation += `Alternative options include ${alternativeMoves}.`;
-    }
-  }
-  
-  explanation += `\n\n(Local analysis - no cloud services required)`;
-  
-  return explanation;
-}
+export const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 export const prepareAnalysisForSpeech = (analysis) => {
   if (!analysis) return "";
@@ -302,5 +299,6 @@ export const stopSpeech = () => {
   }
 };
 
-// Initialize Stockfish on module load
-initLocalStockfish();
+// Initialize Stockfish on module load or when the app starts.
+// For example, you can call this from your main App component's useEffect.
+// initLocalStockfish(); // Call this once.
