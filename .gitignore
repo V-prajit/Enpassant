@@ -8,3 +8,4 @@ Frontend/src/.DS_Store
 /Backend/gcloud/stockfish-cloud-run/node_modules
 /Backend/gcloud/stockfish-cloud-run/openings-cache
 /Frontend/dist
+Backend/.DS_Store
