@@ -1,7 +1,4 @@
-import CONFIG from '../config';
-
-console.log('Running in offline mode - using only local Stockfish engine');
-
+// Simple Stockfish integration
 let stockfishWorker = null;
 let stockfishReady = false;
 let currentOnUpdate = null;
@@ -10,6 +7,7 @@ let currentLocalDepth = 0;
 let currentLocalEvaluation = null;
 let currentLocalMoves = [];
 
+// Speech synthesis
 export const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 function initLocalStockfish() {
@@ -21,36 +19,33 @@ function initLocalStockfish() {
     stockfishWorker.onmessage = (e) => {
       const message = e.data;
       
-      if (typeof message === 'string') {
-        if (message.startsWith('bestmove')) {
-          const parts = message.split(' ');
-          const bestMove = parts[1];
-          
-          if (currentOnUpdate && currentFen) {
-            currentOnUpdate({
-              evaluation: currentLocalEvaluation || '0.0',
-              bestMoves: currentLocalMoves || [],
-              depth: currentLocalDepth,
-              source: 'local',
-              completed: true
-            });
-          }
-        } else if (message.startsWith('info') && message.includes('depth') && message.includes('score')) {
-          handleStockfishInfo(message);
-        } else if (message.startsWith('Loaded Stockfish')) {
-          console.log('Stockfish engine loaded:', message);
-          stockfishReady = true;
-        } else if (message.startsWith('error:')) {
-          console.error('Stockfish worker error:', message);
-          stockfishReady = false;
+      if (message.includes('bestmove')) {
+        const parts = message.split(' ');
+        const bestMove = parts[1];
+        
+        if (currentOnUpdate && currentFen) {
+          currentOnUpdate({
+            evaluation: currentLocalEvaluation || '0.0',
+            bestMoves: currentLocalMoves || [],
+            depth: currentLocalDepth,
+            source: 'local',
+            completed: true
+          });
         }
+      } else if (message.includes('info') && message.includes('depth') && message.includes('score')) {
+        handleStockfishInfo(message);
+      } else if (message.includes('initialized')) {
+        console.log('Stockfish engine loaded:', message);
+        stockfishReady = true;
       }
     };
     
+    stockfishWorker.onerror = (error) => {
+      console.error('Stockfish worker error:', error);
+      stockfishReady = false;
+    };
+    
     stockfishWorker.postMessage('uci');
-    stockfishWorker.postMessage('setoption name Threads value 4');
-    stockfishWorker.postMessage('setoption name Hash value 128');
-    stockfishWorker.postMessage('setoption name MultiPV value 5');
     stockfishWorker.postMessage('isready');
     
     console.log('Local Stockfish engine initializing...');
@@ -62,57 +57,43 @@ function initLocalStockfish() {
 
 function handleStockfishInfo(info) {
   try {
-    if (!info.includes('multipv 1') && !info.includes('depth')) return;
-    
     const depthMatch = info.match(/depth (\d+)/);
-    if (!depthMatch) return;
+    if (depthMatch) {
+      currentLocalDepth = parseInt(depthMatch[1], 10);
+    }
     
-    const depth = parseInt(depthMatch[1], 10);
-    currentLocalDepth = depth;
-    
-    let evaluation = '0.0';
     if (info.includes('score cp')) {
       const scoreMatch = info.match(/score cp ([-\d]+)/);
       if (scoreMatch) {
-        evaluation = (parseInt(scoreMatch[1], 10) / 100).toString();
+        currentLocalEvaluation = (parseInt(scoreMatch[1], 10) / 100).toString();
       }
     } else if (info.includes('score mate')) {
       const mateMatch = info.match(/score mate ([-\d]+)/);
       if (mateMatch) {
-        evaluation = `Mate in ${mateMatch[1]}`;
+        currentLocalEvaluation = `Mate in ${mateMatch[1]}`;
       }
     }
     
-    currentLocalEvaluation = evaluation;
-    
-    const pvMatch = info.match(/pv (.+?)($| info)/);
-    if (!pvMatch) return;
-    
-    const moves = pvMatch[1].trim().split(' ');
-    const bestMove = moves[0];
-    
-    let updatedMoves = [...currentLocalMoves];
-    const moveIndex = info.includes('multipv') ? 
-      parseInt(info.match(/multipv (\d+)/)[1], 10) - 1 : 0;
-    
-    while (updatedMoves.length <= moveIndex) {
-      updatedMoves.push({ uci: '', san: '', evaluation: '' });
+    if (info.includes(' pv ')) {
+      const pvMatch = info.match(/ pv (.+?)($| info)/);
+      if (pvMatch) {
+        const moves = pvMatch[1].trim().split(' ');
+        const bestMove = moves[0];
+        
+        currentLocalMoves = [{
+          uci: bestMove,
+          pv: moves.join(' '),
+          evaluation: currentLocalEvaluation,
+          source: 'local'
+        }];
+      }
     }
     
-    updatedMoves[moveIndex] = {
-      uci: bestMove,
-      pv: moves.join(' '),
-      evaluation: evaluation,
-      source: 'local'
-    };
-    
-    currentLocalMoves = updatedMoves;
-    
-    if (currentOnUpdate && currentFen && depth >= 8) {
+    if (currentOnUpdate && currentFen && currentLocalDepth >= 8) {
       currentOnUpdate({
-        evaluation,
-        bestMoves: updatedMoves,
-        depth,
+        evaluation: currentLocalEvaluation,
+        bestMoves: currentLocalMoves,
+        depth: currentLocalDepth,
         source: 'local',
         completed: false
       });
@@ -129,14 +110,13 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
       
       setTimeout(() => {
         if (!stockfishReady) {
-          console.warn('Stockfish not ready after initialization attempt');
+          console.warn("Stockfish not ready after initialization attempt");
           resolve({
             evaluation: '0.0',
             bestMoves: [],
             depth: 0,
             source: 'local',
-            completed: true,
-            error: 'Local Stockfish engine not available'
+            completed: true
           });
         } else {
           analyzeWithLocalStockfish(fen, depth, onUpdate)
@@ -184,7 +164,15 @@ export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => 
   }
 };
 
-function createLocalExplanation(fen, evaluation, bestMoves, isCheckmate) {
+export const getGeminiExplanation = async (fen, evaluation, bestMoves) => {
+  return {
+    explanation: createLocalExplanation(fen, evaluation, bestMoves),
+    responseTime: 0.1,
+    model: 'offline'
+  };
+};
+
+function createLocalExplanation(fen, evaluation, bestMoves) {
   const fenParts = fen.split(' ');
   const turn = fenParts[1] === 'w' ? 'White' : 'Black';
   
@@ -194,9 +182,9 @@ function createLocalExplanation(fen, evaluation, bestMoves, isCheckmate) {
       const evalValue = parseFloat(evaluation);
       if (!isNaN(evalValue)) {
         if (evalValue > 0.5) {
-          evalText = 'White has an advantage of about ' + Math.abs(evalValue).toFixed(1) + ' pawns';
+          evalText = `White has an advantage of about ${Math.abs(evalValue).toFixed(1)} pawns`;
         } else if (evalValue < -0.5) {
-          evalText = 'Black has an advantage of about ' + Math.abs(evalValue).toFixed(1) + ' pawns';
+          evalText = `Black has an advantage of about ${Math.abs(evalValue).toFixed(1)} pawns`;
         } else {
           evalText = 'The position is roughly equal';
         }
@@ -204,6 +192,7 @@ function createLocalExplanation(fen, evaluation, bestMoves, isCheckmate) {
         evalText = `There is a forced mate sequence`;
       }
     } catch (e) {
+      // Ignore parsing errors
     }
   }
   
@@ -214,9 +203,7 @@ function createLocalExplanation(fen, evaluation, bestMoves, isCheckmate) {
     explanation += `${evalText}. `;
   }
   
-  if (isCheckmate) {
-    explanation += `This position is checkmate. The game is over.`;
-  } else if (bestMoves && bestMoves.length > 0) {
+  if (bestMoves && bestMoves.length > 0) {
     const bestMove = bestMoves[0].san || bestMoves[0].uci;
     explanation += `\n\nThe engine suggests ${bestMove} as the best move. `;
     
@@ -226,64 +213,41 @@ function createLocalExplanation(fen, evaluation, bestMoves, isCheckmate) {
     }
   }
   
-  explanation += `\n\n(This is an offline analysis - your app is running without cloud services.)`;
+  explanation += `\n\n(Local analysis - no cloud services required)`;
   
   return explanation;
 }
 
-export const getGeminiExplanation = async (fen, evaluation, bestMoves, playerLevel = 'advanced', isGameReport = false, isCheckmate = false, userQuestion = null, useDeepThink = false) => {
-  console.log('Using local fallback explanation (offline mode)');
-  
-  if (!isCheckmate) {
-    isCheckmate = evaluation.includes('Checkmate') || (bestMoves.length > 0 && bestMoves[0]?.isCheckmate);
-  }
-  
-  return {
-    explanation: createLocalExplanation(fen, evaluation, bestMoves, isCheckmate),
-    responseTime: 0.1,
-    model: 'offline-mode'
-  };
-};
-
 export const prepareAnalysisForSpeech = (analysis) => {
   if (!analysis) return "";
-
+  
   const handleFormatting = (text) => {
     let processed = text.replace(/\*\*([^*]+)\*\*/g, ", $1, ");
-    
     processed = processed.replace(/^\s*\*\s+/gm, ". Bullet point: ");
-    
     return processed;
   };
 
   let processedText = analysis
-    .replace(/\+(\d+\.\d+)/g, "plus $1") 
-    .replace(/-(\d+\.\d+)/g, "minus $1") 
-
-    .replace(/([KQNBR]?)x([a-h]\d)/g, "$1 takes $2 ") 
-    .replace(/([a-h])x([a-h]\d)/g, "$1 takes $2 ") 
-    .replace(/\+$/g, " check") 
-    .replace(/\#$/g, " checkmate") 
-
-    .replace(/O-O-O/g, "Queen side castle") 
-    .replace(/O-O/g, "King side castle") 
-
-    .replace(/([a-h])(\d)/g, "$1 $2") 
-
-    .replace(/([KQNBR])([a-h])(\d)/g, "$1 to $2 $3") 
-
+    .replace(/\+(\d+\.\d+)/g, "plus $1")
+    .replace(/-(\d+\.\d+)/g, "minus $1")
+    .replace(/([KQNBR]?)x([a-h]\d)/g, "$1 takes $2 ")
+    .replace(/([a-h])x([a-h]\d)/g, "$1 takes $2 ")
+    .replace(/\+$/g, " check")
+    .replace(/\#$/g, " checkmate")
+    .replace(/O-O-O/g, "Queen side castle")
+    .replace(/O-O/g, "King side castle")
+    .replace(/([a-h])(\d)/g, "$1 $2")
+    .replace(/([KQNBR])([a-h])(\d)/g, "$1 to $2 $3")
     .replace(/\bK\b/g, "King")
     .replace(/\bQ\b/g, "Queen")
     .replace(/\bR\b/g, "Rook")
     .replace(/\bB\b/g, "Bishop")
     .replace(/\bN\b/g, "Knight")
-
     .replace(/\s+K\s+/g, " King ")
     .replace(/\s+Q\s+/g, " Queen ")
     .replace(/\s+R\s+/g, " Rook ")
     .replace(/\s+B\s+/g, " Bishop ")
     .replace(/\s+N\s+/g, " Knight ")
-
     .replace(/[Mm]ate in (\d+)/g, "Mate in $1 moves");
 
   return handleFormatting(processedText);
@@ -302,9 +266,8 @@ export const speakText = (text, options = {}) => {
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-
     utterance.pitch = options.pitch || 1.0;
-    utterance.rate = options.rate || CONFIG.SPEECH?.defaultRate || 1.0;
+    utterance.rate = options.rate || 1.0;
     utterance.volume = options.volume || 1.0;
 
     if (options.voice) {
@@ -339,4 +302,5 @@ export const stopSpeech = () => {
   }
 };
 
+// Initialize Stockfish on module load
 initLocalStockfish();
