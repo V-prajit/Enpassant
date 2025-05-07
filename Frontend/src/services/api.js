@@ -1,18 +1,14 @@
-// File: Enpassant/Frontend/src/services/api.js
-
 let stockfishWorker = null;
 let stockfishReady = false;
-let currentOnUpdate = null; // Callback for analysis updates
-let currentAnalysisResolver = null; // To resolve the promise from getStockfishAnalysis
+let currentOnUpdate = null;
+let currentAnalysisResolver = null;
 
-// Variables to hold the latest parsed info from Stockfish
 let currentLocalDepth = 0;
 let currentLocalEvaluation = '0.0';
-let currentLocalMoves = []; // Array of move objects { uci, san, score, etc. }
+let currentLocalMoves = [];
 
 function initLocalStockfish() {
   if (stockfishWorker) {
-    // If worker exists, ensure it's ready or re-check
     if (!stockfishReady) {
       stockfishWorker.postMessage('isready');
     }
@@ -20,13 +16,10 @@ function initLocalStockfish() {
   }
   
   try {
-    // IMPORTANT: Use the Stockfish JS file directly as the worker
-    // Ensure 'stockfish-nnue-16-single.js' is in your /public folder
-    stockfishWorker = new Worker('/stockfish-nnue-16-single.js'); // <--- MODIFIED HERE
+    stockfishWorker = new Worker('/stockfish-nnue-16-single.js');
 
     stockfishWorker.onmessage = (event) => {
       const message = event.data;
-      // console.log("SF_MSG:", message); // For debugging raw messages
 
       if (typeof message === 'string') {
         if (message.includes('uciok') || message.includes('readyok')) {
@@ -172,16 +165,9 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
   });
 }
 
-// This should be called when your application loads to initialize Stockfish early.
-// For example, in your main App.jsx or Layout.jsx useEffect hook.
-// initLocalStockfish(); 
-
-
-// Your existing getStockfishAnalysis function that calls analyzeWithLocalStockfish
 export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => {
   console.log(`Requesting local Stockfish analysis for FEN: ${fen} at depth ${depth}...`);
   try {
-    // Ensure Stockfish is initialized (it will only truly init once)
     if (!stockfishWorker) {
         initLocalStockfish();
     }
@@ -202,17 +188,69 @@ export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => 
   }
 };
 
+export const getGeminiExplanation = async (
+  fen,
+  evaluation,
+  bestMoves,
+  playerLevel = 'beginner',
+  isGameReport = false,
+  isCheckmate = false,
+  userQuestion = null,
+  useDeepThink = false
+) => {
+  const geminiApiUrl = import.meta.env.VITE_GEMINI_URL;
 
-// The rest of your api.js:
-// getGeminiExplanation, prepareAnalysisForSpeech, speakText, stopSpeech
+  if (!geminiApiUrl) {
+    console.warn('VITE_GEMINI_URL is not set. Using mock Gemini response.');
+    return {
+      explanation: `Mock explanation for FEN: ${fen}. Player level: ${playerLevel}. Deep Think: ${useDeepThink}. Question: ${userQuestion || 'N/A'}. Evaluation: ${evaluation}. Best Moves: ${JSON.stringify(bestMoves)}`,
+      responseTime: 0.1,
+      model: 'offline-mock',
+      deepThinkMode: useDeepThink,
+      gamePhase: 'unknown'
+    };
+  }
 
-export const getGeminiExplanation = async (fen, evaluation, bestMoves) => {
-  return {
-    explanation: `Local explanation for ${fen}. Evaluation: ${evaluation}. Best moves: ${JSON.stringify(bestMoves)}`,
-    responseTime: 0.1,
-    model: 'offline-mock'
-  };
+  try {
+    console.log(`Requesting Gemini explanation from: ${geminiApiUrl}`);
+    const response = await fetch(geminiApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fen,
+        evaluation,
+        bestMoves,
+        playerLevel,
+        isGameReport,
+        isCheckmate,
+        checkmateWinner: isCheckmate ? (fen.split(' ')[1] === 'w' ? 'Black' : 'White') : null,
+        userQuestion,
+        useDeepThink
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: `HTTP error! status: ${response.status}` }));
+      console.error('Error from Gemini explanation service:', errorData);
+      throw new Error(errorData.error || `Failed to get explanation from Gemini service. Status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('Gemini explanation received:', result);
+    return result;
+
+  } catch (error) {
+    console.error('Error calling Gemini explanation API:', error);
+    return {
+      explanation: `Error fetching explanation: ${error.message}. Please check the console for details.`,
+      responseTime: 0,
+      error: true
+    };
+  }
 };
+
 export const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
 
 export const prepareAnalysisForSpeech = (analysis) => {
@@ -298,7 +336,3 @@ export const stopSpeech = () => {
     synth.cancel();
   }
 };
-
-// Initialize Stockfish on module load or when the app starts.
-// For example, you can call this from your main App component's useEffect.
-// initLocalStockfish(); // Call this once.

@@ -1,22 +1,15 @@
 #!/bin/bash
-
-# Enhanced deployment script for Stockfish Cloud Run with Firestore
-
-# Exit on any error
 set -e
 
 echo "Building and deploying Stockfish Analysis Service with persistent storage..."
 
-# Configuration
-PROJECT_ID="tidal-hack25tex-223"
+PROJECT_ID="enpassant-459102"
 SERVICE_NAME="stockfish-analysis"
 REGION="us-central1"
 IMAGE_NAME="stockfish-analysis-service"
 
-# Ensure gcloud is configured with the correct project
 gcloud config set project $PROJECT_ID
 
-# Create Storage bucket if it doesn't exist
 BUCKET_NAME="${PROJECT_ID}-chess-analysis"
 echo "Setting up Cloud Storage bucket: $BUCKET_NAME"
 
@@ -28,36 +21,23 @@ else
   gsutil iam ch allUsers:objectViewer gs://$BUCKET_NAME
 fi
 
-# Build the container image
 echo "Building container image..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$IMAGE_NAME .
 
-# Deploy to Cloud Run with additional permissions for Firestore
 echo "Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image gcr.io/$PROJECT_ID/$IMAGE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --memory 8Gi \
-  --cpu 8 \
+  --memory 512Mi \
+  --cpu 1 \
   --concurrency 40 \
   --timeout 300s \
   --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
 
-# Get the service URL
 SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --platform managed --region $REGION --format 'value(status.url)')
 echo "Deployment complete! Service URL: $SERVICE_URL"
-
-# Update the stockfish-analysis function to call the Cloud Run service
-echo "Updating analyze-with-stockfish function..."
-cd ../analyze-position
-mkdir -p function-source
-cat > function-source/index.js << EOL
-// stockfish-client.js
-const fetch = require('node-fetch');
-
-const STOCKFISH_SERVICE_URL = '$SERVICE_URL';
 
 exports.analyzeWithStockfish = async (req, res) => {
   // Set CORS headers

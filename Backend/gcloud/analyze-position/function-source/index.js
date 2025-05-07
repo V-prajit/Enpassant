@@ -1,7 +1,7 @@
 // stockfish-client.js
 const fetch = require('node-fetch');
 
-const STOCKFISH_SERVICE_URL = 'https://stockfish-analysis-w2fppjnuua-uc.a.run.app';
+const STOCKFISH_SERVICE_URL = process.env.STOCKFISH_CLOUD_RUN_URL;
 
 exports.analyzeWithStockfish = async (req, res) => {
   // Set CORS headers
@@ -12,6 +12,11 @@ exports.analyzeWithStockfish = async (req, res) => {
     res.set('Access-Control-Allow-Headers', 'Content-Type');
     res.set('Access-Control-Max-Age', '3600');
     return res.status(204).send('');
+  }
+
+  if (!STOCKFISH_SERVICE_URL) {
+    console.error('STOCKFISH_CLOUD_RUN_URL environment variable is not set or is using fallback.');
+    return res.status(500).json({ error: 'Stockfish service URL not configured on the server.' });
   }
 
   try {
@@ -57,6 +62,11 @@ exports.analyzeWithStockfishStatus = async (req, res) => {
     res.set('Access-Control-Allow-Headers', 'Content-Type');
     res.set('Access-Control-Max-Age', '3600');
     return res.status(204).send('');
+  }
+
+  if (!STOCKFISH_SERVICE_URL) {
+    console.error('STOCKFISH_CLOUD_RUN_URL environment variable is not set or is using fallback for status check.');
+    return res.status(500).json({ error: 'Stockfish service URL not configured on the server for status check.' });
   }
 
   try {
