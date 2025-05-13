@@ -1,16 +1,10 @@
 {
-  "name": "analyze-position",
+  "name": "enpassant-gemini-vm-service",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "gemini-server.js",
   "scripts": {
-    "start": "functions-framework --target=analyzeChessPosition",
-    "start-audio": "functions-framework --target=transcribeAudioWithGemini --source=transcribe-audio.js",
-    "mock": "functions-framework --target=mockAnalyzePosition --source=mock-function.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy": "gcloud functions deploy analyzeChessPosition --runtime nodejs18 --trigger-http --allow-unauthenticated",
-    "deploy-audio": "gcloud functions deploy transcribeAudioWithGemini --runtime nodejs18 --trigger-http --allow-unauthenticated --source=. --entry-point=transcribeAudioWithGemini --memory=1024MB --timeout=120s",
-    "deploy-stockfish": "gcloud functions deploy analyzeWithStockfish --runtime nodejs18 --trigger-http --allow-unauthenticated --source=function-source --entry-point=analyzeWithStockfish",
-    "auth": "gcloud auth login && gcloud auth application-default login"
+    "start": "node gemini-server.js",
+    "dev": "nodemon gemini-server.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +14,11 @@
     "@google-cloud/functions-framework": "^3.3.0",
     "@google-cloud/vertexai": "^1.9.3",
     "busboy": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
     "node-fetch": "^2.6.9"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }
