@@ -33,7 +33,7 @@ exports.analyzeChessPosition = async (req, res) => {
 
   try {
     const vertex = new VertexAI({
-      project: process.env.GOOGLE_CLOUD_PROJECT || 'tidal-hack25tex-223',
+      project: process.env.GOOGLE_CLOUD_PROJECT || 'enpassant-459102',
       location: 'us-central1',
     });
 
