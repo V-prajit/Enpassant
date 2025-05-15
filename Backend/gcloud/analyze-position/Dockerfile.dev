@@ -1,0 +1,12 @@
+FROM --platform=linux/amd64 node:18-slim # Use slim for glibc, build for amd64
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+# Clean install to avoid issues with host-generated lock files when targeting different arch
+RUN rm -rf node_modules && rm -f package-lock.json && npm install --include=optional
+
+COPY . .
+
+EXPOSE 8081
+CMD ["node", "gemini-server.js"] 

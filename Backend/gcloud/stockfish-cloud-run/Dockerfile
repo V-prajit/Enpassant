@@ -1,36 +1,15 @@
-# Use Node.js 18 as base image
-FROM node:18-slim
+FROM --platform=linux/amd64 node:18-alpine
 
-# Install dependencies required for Stockfish
-RUN apt-get update && apt-get install -y \
-    wget \
-    unzip \
-    git \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# Create app directory
-WORKDIR /usr/src/app
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# If it needs stockfish binary, that needs to be handled here or in the image
 
-# Clone and build Stockfish from source
-# Use x86-64 architecture which will work on Google Cloud Run
-RUN git clone https://github.com/official-stockfish/Stockfish.git && \
-    cd Stockfish/src && \
-    make -j build ARCH=x86-64-avx2 && \
-    cp stockfish /usr/local/bin/
+COPY . .
 
-# Copy package.json and install dependencies
-COPY package.json ./
-RUN npm install
+# Ensure Stockfish binary is executable if copied
+# RUN chmod +x ./path/to/stockfish_binary_if_any
 
-# Copy all application files
-COPY . ./
-
-# Create cache directories
-RUN mkdir -p tmp-cache analysis-cache openings-cache
-
-# Expose the port the app runs on
 EXPOSE 8080
-
-# Command to run the application
-CMD [ "node", "server.js" ]
+CMD ["node", "server.js"]

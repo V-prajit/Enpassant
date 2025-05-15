@@ -42,37 +42,45 @@ exports.analyzeChessPosition = async (req, res) => {
     
     const userQuestion = req.body.userQuestion;
     
-    const modelConfig = deepThinkEnabled
-      ? {
-          model: 'gemini-2.5-pro-preview-05-06',
-          generationConfig: {
-            maxOutputTokens: 4096, 
-            temperature: 0.15,
-            topP: 0.9,            
-            topK: 30,
-          }
-        }
-      : userQuestion 
-        ? {
-            model: 'gemini-2.5-flash-preview-04-17',
-            generationConfig: {
-              maxOutputTokens: 2048, 
-              temperature: 0.2,     
-              topP: 0.95,          
-              topK: 20,            
-            }
-          }
-        : {
-            model: 'gemini-2.5-flash-preview-04-17',
-            generationConfig: {
-              maxOutputTokens: 2048,
-              temperature: 0.1,
-              topP: 0.8,
-              topK: 40,
-            }
-          };
+    let modelName;
+    let generationConfig;
+    let requestOptions = {};
+
+    if (deepThinkEnabled){
+      console.log("Using Deep Think mode with Gemini 2.5 Flash (thinking enabled by default).");
+      modelName = 'gemini-2.5-flash-preview-04-17';
+      generationConfig = {
+        maxOutputTokens: 4096,
+        temperature: 0.15,
+        topP: 0.9,            
+        topK: 30,
+      };
+    } else {
+      console.log("Standard mode with Gemini 2.5 Flash (thinking disabled).");
+      modelName = 'gemini-2.5-flash-preview-04-17';
+      if (userQuestion) {
+        generationConfig = {
+          maxOutputTokens: 2048, 
+          temperature: 0.2,     
+          topP: 0.95,          
+          topK: 20,            
+        };
+      } else {
+        generationConfig = {
+          maxOutputTokens: 2048,
+          temperature: 0.1,
+          topP: 0.8,
+          topK: 40,
+        };
+      }
+      requestOptions.thinkingConfig = { thinkingBudget: 0 };
+      console.log("Applied thinkingConfig with thinkingBudget: 0 for standard Flash model request.");
+    }
     
-    const generativeModel = vertex.preview.getGenerativeModel(modelConfig);
+    const generativeModel = vertex.preview.getGenerativeModel({
+      model: modelName,
+      generationConfig: generationConfig,
+    });
 
     const { 
       fen, 
@@ -82,7 +90,6 @@ exports.analyzeChessPosition = async (req, res) => {
       isCheckmate, 
       checkmateWinner,
       isGameReport,
-      useDeepThink
      } = req.body || {};
     
     if (!fen) {
@@ -203,9 +210,12 @@ exports.analyzeChessPosition = async (req, res) => {
     console.log('Sending specialized prompt to Gemini...');
     const startTime = Date.now();
     
-    const result = await generativeModel.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    });
+    const generateContentRequest = {
+      contents: [{ role: 'user', parts: [{ text: prompt }]}],
+      ...requestOptions
+    };
+
+    const result = await generativeModel.generateContent( generateContentRequest);
 
     const responseTime = (Date.now() - startTime) / 1000;
     console.log(`Gemini response received in ${responseTime.toFixed(2)} seconds`);

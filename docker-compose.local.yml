@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  stockfish-service:
+    build: 
+      context: ./Backend/gcloud/stockfish-cloud-run 
+      dockerfile: Dockerfile # This is the one you manually ensure is for amd64
+    platform: linux/amd64 # Explicitly run as amd64 via Rosetta
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+    volumes:
+      - ./Backend/gcloud/stockfish-cloud-run:/app # Mount for potential code changes if server reloads
+      - stockfish_analysis_cache:/app/analysis-cache
+      - stockfish_tmp_cache:/app/tmp-cache
+    restart: unless-stopped
+
+  gemini-analysis-service:
+    build:
+      context: ./Backend/gcloud/analyze-position
+      dockerfile: Dockerfile.dev 
+    platform: linux/amd64 # Run Gemini backend as amd64 via Rosetta
+    ports:
+      - "8081:8081" 
+    volumes:
+      - ./Backend/gcloud/analyze-position:/app # Mount for potential code changes
+      # Ensure this path is correct for your local machine where you store the key
+      - ~/.gcp-keys/enpassant-local-dev-key.json:/app/gcp-key.json:ro
+    environment:
+      - PORT=8081
+      - STOCKFISH_URL=http://stockfish-service:8080 # Docker internal DNS
+      - GOOGLE_CLOUD_PROJECT=enpassant-459102 # Or your GCP project
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-key.json
+    depends_on:
+      - stockfish-service
+    restart: unless-stopped
+
+volumes: 
+  stockfish_analysis_cache:
+  stockfish_tmp_cache:
+
