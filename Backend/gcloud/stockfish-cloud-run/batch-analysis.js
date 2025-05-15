@@ -7,7 +7,7 @@ const { Storage } = require('@google-cloud/storage');
 
 // Set up Google Cloud Storage
 const storage = new Storage();
-const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'tidal-hack25tex-223';
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || 'enpassant-459102';
 const BUCKET_NAME = `${PROJECT_ID}-chess-analysis`;
 
 // Initialize storage bucket

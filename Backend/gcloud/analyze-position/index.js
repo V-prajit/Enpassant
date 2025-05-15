@@ -210,8 +210,25 @@ exports.analyzeChessPosition = async (req, res) => {
     const responseTime = (Date.now() - startTime) / 1000;
     console.log(`Gemini response received in ${responseTime.toFixed(2)} seconds`);
 
+    console.log('Full Gemini API result object:', JSON.stringify(result, null, 2)); 
+
+    const candidate = result.response?.candidates?.[0];
+    if (candidate) {
+        console.log('Candidate Finish Reason:', candidate.finishReason);
+        console.log('Candidate Safety Ratings:', JSON.stringify(candidate.safetyRatings, null, 2));
+        if (candidate.content && candidate.content.parts) {
+            console.log('Candidate Content Parts:', JSON.stringify(candidate.content.parts, null, 2));
+        } else {
+            console.log('Candidate content or parts are undefined.');
+        }
+    } else {
+        console.log('No candidates found in Gemini response.');
+    }
+
     const text = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || 
                 'Sorry, I could not analyze this position due to a technical issue.';
+
+    console.log(`Extracted text (or fallback): ${text}`);
 
     console.log(`Generated ${text.length} characters of analysis`);
 
@@ -256,7 +273,7 @@ exports.transcribeAudioWithGemini = async (req, res) => {
     
     // Initialize Vertex AI
     const vertex = new VertexAI({
-      project: process.env.GOOGLE_CLOUD_PROJECT || 'tidal-hack25tex-223',
+      project: process.env.GOOGLE_CLOUD_PROJECT || 'enpassant-459102',
       location: 'us-central1',
     });
     
