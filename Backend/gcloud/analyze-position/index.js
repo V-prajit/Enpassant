@@ -46,7 +46,7 @@ exports.analyzeChessPosition = async (req, res) => {
       ? {
           model: 'gemini-2.5-pro-preview-05-06',
           generationConfig: {
-            maxOutputTokens: 1200, 
+            maxOutputTokens: 4096, 
             temperature: 0.15,
             topP: 0.9,            
             topK: 30,
@@ -56,7 +56,7 @@ exports.analyzeChessPosition = async (req, res) => {
         ? {
             model: 'gemini-2.5-flash-preview-04-17',
             generationConfig: {
-              maxOutputTokens: 300, 
+              maxOutputTokens: 2048, 
               temperature: 0.2,     
               topP: 0.95,          
               topK: 20,            
@@ -65,7 +65,7 @@ exports.analyzeChessPosition = async (req, res) => {
         : {
             model: 'gemini-2.5-flash-preview-04-17',
             generationConfig: {
-              maxOutputTokens: 800,
+              maxOutputTokens: 2048,
               temperature: 0.1,
               topP: 0.8,
               topK: 40,
