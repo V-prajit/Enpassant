@@ -21,22 +21,14 @@ const {
   createGenericPrompt,
 } = require('./player-levels');
 
-/* ------------ constants ------------------------------------------------- */
 const MODEL_ID             = 'gemini-2.5-flash-preview-04-17';
-const DEFAULT_DEEP_BUDGET  = 8192; // Default budget for deep thinking mode
+const DEFAULT_DEEP_BUDGET  = 16384;
 
-/* helper */
 function makeThinkingConfig(enabled, budgetFromClient) {
-  // If enabled (deepThink is true), use the client's budget or the default deep budget.
-  // If not enabled (deepThink is false, i.e., fast mode), set thinkingBudget to 0.
   return { thinkingBudget: enabled ? (Number(budgetFromClient) || DEFAULT_DEEP_BUDGET) : 0 };
 }
 
-/* ======================================================================= */
-/* CHESS POSITION ANALYSIS                                                */
-/* ======================================================================= */
 exports.analyzeChessPosition = async (req, res) => {
-  // Set CORS headers for preflight and actual requests
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
     res.set({
@@ -49,20 +41,17 @@ exports.analyzeChessPosition = async (req, res) => {
 
   try {
     const deepThink   = req.body.useDeepThink === true;
-    // Create the thinkingConfig object based on whether deepThink is enabled
     const thinkingConfig = makeThinkingConfig(deepThink, req.body.thinkingBudget);
 
-    // Initialize Vertex AI client
     const vertex = new VertexAI({
       project: process.env.GOOGLE_CLOUD_PROJECT || 'enpassant-459102',
       location: 'us-central1',
     });
 
-    // Configure and get the generative model
     const model = vertex.preview.getGenerativeModel({
       model: MODEL_ID,
       generationConfig: {
-        maxOutputTokens: deepThink ? 4096 : 2048,
+        maxOutputTokens: deepThink ? 8192 : 4096,
         temperature    : deepThink ? 0.15  : 0.20,
         topP           : deepThink ? 0.90  : 0.95,
         topK           : deepThink ? 30    : 20,
