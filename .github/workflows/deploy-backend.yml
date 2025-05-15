@@ -1,0 +1,78 @@
+name: Deploy Backend to VM
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Backend/gcloud/analyze-position/**'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    name: Deploy Backend Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VM Host Key to Known Hosts
+        run: |
+          # Create the .ssh directory if it doesn't exist
+          mkdir -p ~/.ssh
+          # Scan the host key and add it. This avoids interactive prompts.
+          # For higher security, you could fetch the host key once, verify it,
+          # and store it as another GitHub secret, then echo that secret here.
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy to Google VM
+        env:
+          SSH_USER_HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+          VM_PATH: ${{ secrets.VM_PROJECT_PATH }}
+          DEPLOY_BRANCH: main
+        run: |
+          echo "Connecting to VM: $SSH_USER_HOST"
+          echo "Project path on VM: $VM_PATH"
+          echo "Deploying branch: $DEPLOY_BRANCH"
+
+          ssh $SSH_USER_HOST << EOF
+            echo "---> Successfully connected to VM."
+
+            echo "---> Navigating to project directory: $VM_PATH"
+            cd "$VM_PATH" || exit 1 # Exit if cd fails
+
+            echo "---> Checking out branch: $DEPLOY_BRANCH"
+            git checkout "$DEPLOY_BRANCH"
+
+            echo "---> Pulling latest code from origin/$DEPLOY_BRANCH..."
+            git pull origin "$DEPLOY_BRANCH"
+
+            echo "---> Installing/updating Node.js dependencies (production only)..."
+            # npm ci is generally safer for CI/CD if package-lock.json is committed
+            if [ -f "package-lock.json" ]; then
+              npm ci --omit=dev
+            else
+              npm install --omit=dev
+            fi
+
+            echo "---> Reloading PM2 application 'enpassant-gemini'..."
+            # The app name 'enpassant-gemini' is from your ecosystem.config.js
+            pm2 reload enpassant-gemini || pm2 restart enpassant-gemini
+
+            echo "---> Deployment script finished on VM."
+          EOF
+
+      - name: Verify PM2 Status (Optional)
+        if: always() # This step runs even if previous steps fail, for debugging
+        env:
+          SSH_USER_HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
+        run: |
+          echo "Attempting to check PM2 status on VM post-deployment..."
+          ssh $SSH_USER_HOST 'pm2 list'

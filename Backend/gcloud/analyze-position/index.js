@@ -37,40 +37,33 @@ exports.analyzeChessPosition = async (req, res) => {
       location: 'us-central1',
     });
 
-    // Determine if we should use Deep Think mode with Gemini 2.0 Pro
-    // Get the value from the request body
     const deepThinkEnabled = req.body.useDeepThink === true;
     console.log(`Using ${deepThinkEnabled ? 'Deep Think' : 'Standard'} mode`);
     
-    // Get the userQuestion from the request body
     const userQuestion = req.body.userQuestion;
     
-    // Use more precise configuration for chat responses
     const modelConfig = deepThinkEnabled
       ? {
-          // Deep Think mode uses Gemini 2.0 Pro for more thorough analysis
-          model: 'gemini-2.0-pro-exp-02-05',
+          model: 'gemini-2.5-pro-preview-05-06',
           generationConfig: {
-            maxOutputTokens: 1200, // Longer, more detailed responses
-            temperature: 0.15,     // Slightly more creative for deeper insights
+            maxOutputTokens: 1200, 
+            temperature: 0.15,
             topP: 0.9,            
             topK: 30,
           }
         }
       : userQuestion 
         ? {
-            // For direct questions, use settings optimized for concise, precise answers
-            model: 'gemini-2.0-flash', // Fast model for quick responses
+            model: 'gemini-2.5-flash-preview-04-17',
             generationConfig: {
-              maxOutputTokens: 300, // Shorter responses
-              temperature: 0.2,     // Slightly more creative but still focused
-              topP: 0.95,           // Higher topP for more focused responses
-              topK: 20,             // Lower topK for more deterministic outputs
+              maxOutputTokens: 300, 
+              temperature: 0.2,     
+              topP: 0.95,          
+              topK: 20,            
             }
           }
         : {
-            // For general analysis, use default settings
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash-preview-04-17',
             generationConfig: {
               maxOutputTokens: 800,
               temperature: 0.1,
@@ -89,7 +82,6 @@ exports.analyzeChessPosition = async (req, res) => {
       isCheckmate, 
       checkmateWinner,
       isGameReport,
-      // userQuestion already extracted above
       useDeepThink
      } = req.body || {};
     
@@ -109,19 +101,15 @@ exports.analyzeChessPosition = async (req, res) => {
       userQuestion: userQuestion || null
     });
 
-    // Detect game phase first
     const gamePhase = determineGamePhase(fen);
     console.log(`Detected game phase: ${gamePhase}`);
 
     let prompt;
     
-    // Deep Think mode adds more advanced analysis and depth to prompts
     if (deepThinkEnabled) {
-      // Create a more detailed prompt for deep thinking mode
       console.log("Using Deep Think mode for enhanced analysis");
       
       if (userQuestion) {
-        // For questions in Deep Think mode, still use chat prompt but with enhancements
         prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase) + `
         
         ## DEEP THINK MODE
@@ -157,7 +145,6 @@ exports.analyzeChessPosition = async (req, res) => {
         `;
       } 
       else {
-        // For standard position analysis in Deep Think mode
         let basePrompt;
         switch (gamePhase) {
           case 'opening':
@@ -187,13 +174,10 @@ exports.analyzeChessPosition = async (req, res) => {
         `;
       }
     }
-    // Standard mode prompts (no Deep Think)
     else {
-      // If user has asked a specific question, use the chat prompt
       if (userQuestion) {
         prompt = createChatPrompt(fen, evaluation, bestMoves, validatedLevel, userQuestion, gamePhase);
       }
-      // Otherwise, use the standard prompts
       else if (isGameReport) {
         prompt = createGameReportPrompt(fen, evaluation, bestMoves, validatedLevel, isCheckmate, checkmateWinner);
       }
@@ -211,7 +195,6 @@ exports.analyzeChessPosition = async (req, res) => {
             prompt = createEndgamePrompt(fen, evaluation, bestMoves, validatedLevel);
             break;
           default:
-            // Fallback to a generic prompt if phase detection fails
             prompt = createGenericPrompt(fen, evaluation, bestMoves, validatedLevel);
         }
       }
@@ -227,7 +210,6 @@ exports.analyzeChessPosition = async (req, res) => {
     const responseTime = (Date.now() - startTime) / 1000;
     console.log(`Gemini response received in ${responseTime.toFixed(2)} seconds`);
 
-    // Extract text from the response
     const text = result.response?.candidates?.[0]?.content?.parts?.[0]?.text || 
                 'Sorry, I could not analyze this position due to a technical issue.';
 
@@ -238,7 +220,7 @@ exports.analyzeChessPosition = async (req, res) => {
       responseTime: responseTime,
       gamePhase: gamePhase || 'unknown',
       deepThinkMode: deepThinkEnabled,
-      model: deepThinkEnabled ? 'gemini-2.0-pro-exp-02-05' : 'gemini-2.0-flash'
+      model: deepThinkEnabled ? 'gemini-2.5-pro-preview-05-06' : 'gemini-2.5-flash-preview-04-17'
     });
   } catch (error) {
     console.error('Error:', error);
@@ -246,27 +228,7 @@ exports.analyzeChessPosition = async (req, res) => {
   }
 };
 
-
-// createEndgamePrompt is now imported from player-levels.js
-
-// createGenericPrompt is now imported from player-levels.js
-
-// formatBestMoves is now imported from player-levels.js
-
-// createCheckmatePrompt is now imported from player-levels.js
-
-// createChatPrompt is now imported from player-levels.js
-
-// createGameReportPrompt is now imported from player-levels.js
-
-/**
- * Cloud Function to transcribe audio with Gemini API and incorporate chess context
- * 
- * @param {Object} req - HTTP request object
- * @param {Object} res - HTTP response object
- */
 exports.transcribeAudioWithGemini = async (req, res) => {
-  // Set CORS headers for preflight requests
   res.set('Access-Control-Allow-Origin', '*');
   
   if (req.method === 'OPTIONS') {
@@ -276,12 +238,10 @@ exports.transcribeAudioWithGemini = async (req, res) => {
     return res.status(204).send('');
   }
   
-  // Log request source
   const userAgent = req.headers['user-agent'] || 'Unknown';
   console.log(`Handling audio transcription request from: ${userAgent}`);
   
   try {
-    // Process multipart form data (audio file)
     const { audioFilePath, fields } = await parseFormData(req);
     
     if (!audioFilePath) {
