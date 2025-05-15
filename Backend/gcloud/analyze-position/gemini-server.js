@@ -35,6 +35,6 @@ app.get('/', (req, res) => {
     res.status(200).send('Gemini Analysis Service for Enpassant is running.');
 });
 
-app.listen(port, () => {
-    console.log(`Gemini Analysis Service listening on port ${port}`);
+app.listen(port, '127.0.0.1', () => {
+    console.log(`Gemini Analysis Service listening on port <span class="math-inline">\{port\} at http\://127\.0\.0\.1\:</span>{port}`);
 });
