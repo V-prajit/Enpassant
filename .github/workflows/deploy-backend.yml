@@ -3,7 +3,7 @@ name: Deploy Backend to VM
 on:
   push:
     branches:
-      - main
+      - production
     paths:
       - 'Backend/gcloud/analyze-position/**'
       - '.github/workflows/deploy-backend.yml'
@@ -36,7 +36,7 @@ jobs:
         env:
           SSH_USER_HOST: ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}
           VM_PATH: ${{ secrets.VM_PROJECT_PATH }}
-          DEPLOY_BRANCH: main
+          DEPLOY_BRANCH: production
         run: |
           echo "Connecting to VM: $SSH_USER_HOST"
           echo "Project path on VM: $VM_PATH"
