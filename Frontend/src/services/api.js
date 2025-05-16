@@ -28,38 +28,38 @@ function initLocalStockfish() {
             stockfishReady = true;
           }
         } else if (message.startsWith('info')) {
-          parseStockfishInfo(message); // Parse info strings
-          if (currentOnUpdate && currentLocalDepth > 0) { // Send updates if depth is meaningful
+          parseStockfishInfo(message); 
+          if (currentOnUpdate && currentLocalDepth > 0) { 
             currentOnUpdate({
               evaluation: currentLocalEvaluation,
-              bestMoves: currentLocalMoves.slice(0, 5), // Send top 5 moves for updates
+              bestMoves: currentLocalMoves.slice(0, 5), 
               depth: currentLocalDepth,
               source: 'local',
-              completed: false // This is an intermediate update
+              completed: false 
             });
           }
         } else if (message.startsWith('bestmove')) {
-          parseStockfishBestmove(message); // Parse bestmove
+          parseStockfishBestmove(message); 
           if (currentOnUpdate) {
             currentOnUpdate({
               evaluation: currentLocalEvaluation,
               bestMoves: currentLocalMoves.slice(0, 5),
-              depth: currentLocalDepth, // Should be the final depth
+              depth: currentLocalDepth, 
               source: 'local',
               completed: true
             });
           }
-          if (currentAnalysisResolver) {
-            currentAnalysisResolver({ // Resolve the main promise
+          if (currentAnalysisResolver && currentAnalysisResolver.resolve) {
+            currentAnalysisResolver.resolve({ 
               evaluation: currentLocalEvaluation,
               bestMoves: currentLocalMoves,
               depth: currentLocalDepth,
               source: 'local',
               completed: true
             });
-            currentAnalysisResolver = null; // Reset resolver
+            currentAnalysisResolver = null; 
           }
-          stockfishReady = true; // Ready for next command
+          stockfishReady = true; 
         }
       }
     };
@@ -67,11 +67,10 @@ function initLocalStockfish() {
     stockfishWorker.onerror = (error) => {
       console.error('Stockfish worker error:', error);
       stockfishReady = false;
-      if (currentAnalysisResolver) {
+      if (currentAnalysisResolver && currentAnalysisResolver.reject) {
         currentAnalysisResolver.reject(new Error('Stockfish worker error'));
         currentAnalysisResolver = null;
       }
-      // Optionally try to re-initialize or notify the user
     };
     
     console.log('Local Stockfish engine (direct worker) initializing...');
@@ -103,7 +102,6 @@ function parseStockfishInfo(infoString) {
     const pvMatch = infoString.match(/ pv (.+?)($| (?:multipv|info|nodes|nps|tbhits|wdl|hashfull|currmove|currmovenumber|cpuload|string))/);
     if (pvMatch && pvMatch[1]) {
       const moves = pvMatch[1].trim().split(' ');
-      // For simplicity, we'll just store UCI moves. SAN conversion can happen in UI if needed with chess.js
       currentLocalMoves = moves.map(uci => ({ uci: uci, san: uci })); // Placeholder for SAN
     }
   }
@@ -113,32 +111,30 @@ function parseStockfishBestmove(bestmoveString) {
     const parts = bestmoveString.split(' ');
     if (parts.length >= 2 && parts[0] === 'bestmove') {
         const bestMoveUci = parts[1];
-        // Ensure this best move is at the top of currentLocalMoves or add it
         if (!currentLocalMoves.find(m => m.uci === bestMoveUci)) {
             currentLocalMoves.unshift({ uci: bestMoveUci, san: bestMoveUci });
         }
     }
 }
 
-
 function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
   return new Promise((resolve, reject) => {
     if (!stockfishWorker || !stockfishReady) {
-      initLocalStockfish(); // Initialize if not already
+      initLocalStockfish(); 
 
       let attempts = 0;
-      const maxAttempts = 50; // Wait up to 5 seconds
+      const maxAttempts = 50; 
       const checkReadyInterval = setInterval(() => {
         attempts++;
         if (stockfishReady) {
           clearInterval(checkReadyInterval);
           currentOnUpdate = onUpdate;
-          currentAnalysisResolver = { resolve, reject }; // Store resolver
+          currentAnalysisResolver = { resolve, reject }; 
           currentLocalDepth = 0;
           currentLocalEvaluation = '0.0';
           currentLocalMoves = [];
           
-          stockfishWorker.postMessage('stop'); // Stop any previous search
+          stockfishWorker.postMessage('stop'); 
           stockfishWorker.postMessage('ucinewgame');
           stockfishWorker.postMessage('position fen ' + fen);
           stockfishWorker.postMessage('go depth ' + depth);
@@ -151,9 +147,8 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
       return;
     }
 
-    // If already ready
     currentOnUpdate = onUpdate;
-    currentAnalysisResolver = { resolve, reject }; // Store resolver
+    currentAnalysisResolver = { resolve, reject }; 
     currentLocalDepth = 0;
     currentLocalEvaluation = '0.0';
     currentLocalMoves = [];
@@ -176,7 +171,6 @@ export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => 
     return result;
   } catch (error) {
     console.error('Error in getStockfishAnalysis:', error);
-    // Return a structure indicating failure but allowing UI to handle it
     return {
       evaluation: 'Error',
       bestMoves: [],

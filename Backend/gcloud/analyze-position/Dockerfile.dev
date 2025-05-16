@@ -1,12 +1,13 @@
-FROM --platform=linux/amd64 node:18-slim # Use slim for glibc, build for amd64
+FROM --platform=linux/amd64 node:18-slim 
 
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-# Clean install to avoid issues with host-generated lock files when targeting different arch
+# Clean install if targeting different arch than host
 RUN rm -rf node_modules && rm -f package-lock.json && npm install --include=optional
 
 COPY . .
 
 EXPOSE 8081
+# This should match the start script in your analyze-position/package.json
 CMD ["node", "gemini-server.js"] 

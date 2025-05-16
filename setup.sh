@@ -31,7 +31,7 @@ command_exists() {
 section "Checking required tools..."
 
 REQUIRED_TOOLS=("npm" "node" "git")
-OPTIONAL_TOOLS=("docker" "gcloud")
+OPTIONAL_TOOLS=("docker" "gcloud") # gcloud might still be needed for Gemini backend deployment
 
 MISSING_REQUIRED=0
 for tool in "${REQUIRED_TOOLS[@]}"; do
@@ -74,11 +74,11 @@ install_frontend_deps() {
   cd "$BASE_DIR"
 }
 
-# Install backend dependencies
+# Install backend dependencies (only for analyze-position)
 install_backend_deps() {
   section "Installing backend dependencies..."
   
-  # Install dependencies for analyze-position
+  # Install dependencies for analyze-position (Gemini service)
   if [ -d "$BACKEND_DIR/gcloud/analyze-position" ]; then
     cd "$BACKEND_DIR/gcloud/analyze-position"
     if [ -f "package.json" ]; then
@@ -90,33 +90,22 @@ install_backend_deps() {
     cd "$BASE_DIR"
   fi
   
-  # Install dependencies for stockfish-cloud-run
-  if [ -d "$BACKEND_DIR/gcloud/stockfish-cloud-run" ]; then
-    cd "$BACKEND_DIR/gcloud/stockfish-cloud-run"
-    if [ -f "package.json" ]; then
-      npm install
-      echo -e "${GREEN}✓ stockfish-cloud-run dependencies installed${NC}"
-    else
-      echo -e "${YELLOW}Warning: package.json not found in stockfish-cloud-run directory${NC}"
-    fi
-    cd "$BASE_DIR"
-  fi
+  # Removed stockfish-cloud-run dependency installation
 }
 
-# Setup Google Cloud (if available)
+# Setup Google Cloud (if available, for Gemini backend)
 setup_gcloud() {
   if ! command_exists gcloud; then
-    echo -e "${YELLOW}Google Cloud SDK not found. Skipping cloud setup.${NC}"
+    echo -e "${YELLOW}Google Cloud SDK not found. Skipping cloud setup for Gemini backend.${NC}"
     return
   fi
   
-  section "Setting up Google Cloud..."
+  section "Setting up Google Cloud (for Gemini backend if needed)..."
   
-  # Check if already authenticated
   ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null || echo "")
   
   if [ -z "$ACCOUNT" ]; then
-    echo "You need to authenticate with Google Cloud."
+    echo "You need to authenticate with Google Cloud for Gemini backend deployment."
     echo "Run the following command to login:"
     echo -e "${BLUE}gcloud auth login${NC}"
     echo
@@ -132,11 +121,10 @@ setup_gcloud() {
     echo -e "${GREEN}✓ Already authenticated as $ACCOUNT${NC}"
   fi
   
-  # Check current project
   CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
   
   echo "Current Google Cloud project: ${CURRENT_PROJECT:-None}"
-  read -p "Do you want to set a different project? (y/n): " CHANGE_PROJECT
+  read -p "Do you want to set a different project for Gemini backend? (y/n): " CHANGE_PROJECT
   
   if [[ $CHANGE_PROJECT =~ ^[Yy]$ ]]; then
     read -p "Enter your Google Cloud project ID: " NEW_PROJECT
@@ -144,14 +132,15 @@ setup_gcloud() {
     echo -e "${GREEN}✓ Project set to $NEW_PROJECT${NC}"
   fi
   
-  # Enable required APIs
-  echo "Enabling required Google Cloud APIs..."
+  # Enable required APIs for Gemini (Vertex AI) and Cloud Functions if deploying analyze-position
+  echo "Enabling required Google Cloud APIs for Gemini backend..."
   gcloud services enable cloudfunctions.googleapis.com
   gcloud services enable cloudbuild.googleapis.com
-  gcloud services enable run.googleapis.com
+  # gcloud services enable run.googleapis.com # Not needed for stockfish-cloud-run anymore
   gcloud services enable artifactregistry.googleapis.com
+  gcloud services enable aiplatform.googleapis.com # For Vertex AI (Gemini)
   
-  echo -e "${GREEN}✓ Google Cloud setup complete${NC}"
+  echo -e "${GREEN}✓ Google Cloud setup for Gemini backend complete${NC}"
 }
 
 # Setup local development config
@@ -163,12 +152,18 @@ setup_local_config() {
   if [ ! -f "$FRONTEND_ENV" ]; then
     cat > "$FRONTEND_ENV" << EOF
 # Local development API endpoints
-VITE_STOCKFISH_URL=http://localhost:8080
-VITE_GEMINI_URL=http://localhost:8081/analyzeChessPosition
+# VITE_STOCKFISH_URL is removed (client-side only)
+VITE_GEMINI_URL=http://localhost:8081/analyzeChessPosition # For local Dockerized Gemini service
+# VITE_AUDIO_URL could be http://localhost:8081 if gemini service handles audio, 
+# or empty if client-side only and no backend audio processing.
+# Since we removed cloud audio, this depends on if gemini-server.js still has an audio endpoint for other purposes.
+# For now, assuming no backend audio processing.
+VITE_AUDIO_URL=
 
 # Production API endpoints - uncomment these when building for production
-# VITE_STOCKFISH_URL=https://stockfish-analysis-service-xxxxx-uc.a.run.app
+# VITE_STOCKFISH_URL removed
 # VITE_GEMINI_URL=https://us-central1-your-project-id.cloudfunctions.net/analyzeChessPosition
+# VITE_AUDIO_URL removed or set to your production Gemini audio endpoint if any
 EOF
     echo -e "${GREEN}✓ Created frontend .env.local file${NC}"
   else
@@ -185,53 +180,12 @@ EOF
   fi
 }
 
-# Update Stockfish and ensure it's available
+# Update Stockfish and ensure it's available (this section might be mostly irrelevant now)
 setup_stockfish() {
-  section "Setting up Stockfish..."
-  
-  # Create directory for stockfish binary if needed
-  if [ ! -d "$BACKEND_DIR/gcloud/stockfish-cloud-run/bin" ]; then
-    mkdir -p "$BACKEND_DIR/gcloud/stockfish-cloud-run/bin"
-  fi
-  
-  # Check if Stockfish is already available
-  if command_exists stockfish; then
-    echo -e "${GREEN}✓ Stockfish is available in system PATH${NC}"
-    echo "You can use the system installation for development."
-    return
-  fi
-  
-  # Determine platform
-  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    PLATFORM="linux"
-  elif [[ "$OSTYPE" == "darwin"* ]]; then
-    PLATFORM="mac"
-  else
-    echo -e "${YELLOW}Warning: Unsupported platform for automatic Stockfish installation.${NC}"
-    echo "Please download Stockfish manually from https://stockfishchess.org/download/"
-    return
-  fi
-  
-  echo "Attempting to download Stockfish for $PLATFORM..."
-  
-  # Download and setup Stockfish based on platform
-  if [ "$PLATFORM" == "linux" ]; then
-    echo "For Linux, please install Stockfish using your package manager:"
-    echo "  Ubuntu/Debian: sudo apt-get install stockfish"
-    echo "  Fedora: sudo dnf install stockfish"
-    echo "  Arch: sudo pacman -S stockfish"
-  elif [ "$PLATFORM" == "mac" ]; then
-    echo "For macOS, you can install Stockfish using Homebrew:"
-    echo "  brew install stockfish"
-    
-    if command_exists brew; then
-      read -p "Do you want to install Stockfish via Homebrew now? (y/n): " INSTALL_STOCKFISH
-      if [[ $INSTALL_STOCKFISH =~ ^[Yy]$ ]]; then
-        brew install stockfish
-        echo -e "${GREEN}✓ Stockfish installed via Homebrew${NC}"
-      fi
-    fi
-  fi
+  section "Setting up Stockfish (Client-side)..."
+  echo "Client-side Stockfish (stockfish-nnue-16-single.js) is included in Frontend/public/"
+  echo "No separate backend Stockfish setup is required with these changes."
+  # Removed backend stockfish download/setup logic
 }
 
 # Main menu
@@ -246,22 +200,19 @@ main() {
     exit 0
   fi
   
-  # Check if this is a fresh git clone
   GIT_FILES=$(git ls-files | wc -l)
   if [ "$GIT_FILES" -eq 0 ]; then
     echo -e "${RED}Error: No git files found. Make sure you're in the Enigma repository.${NC}"
     exit 1
   fi
   
-  # Run setup steps
   install_frontend_deps
-  install_backend_deps
+  install_backend_deps # Will only install for analyze-position now
   setup_local_config
-  setup_stockfish
+  setup_stockfish      # Updated to reflect client-side nature
   
-  # Offer Google Cloud setup if gcloud is available
   if command_exists gcloud; then
-    read -p "Do you want to set up Google Cloud for deployment? (y/n): " SETUP_CLOUD
+    read -p "Do you want to set up Google Cloud for deploying the Gemini backend? (y/n): " SETUP_CLOUD
     if [[ $SETUP_CLOUD =~ ^[Yy]$ ]]; then
       setup_gcloud
     fi
@@ -269,9 +220,9 @@ main() {
   
   echo -e "\n${GREEN}✓ Setup completed successfully!${NC}"
   echo -e "\nNext steps:"
-  echo -e "1. Run ${BLUE}./dev.sh${NC} to start the local development environment"
+  echo -e "1. Run ${BLUE}./dev.sh${NC} to start the local development environment (Frontend and optionally local Gemini backend via Docker)"
   echo -e "2. Visit ${BLUE}http://localhost:3000${NC} in your browser"
-  echo -e "3. When ready to deploy, run ${BLUE}./deploy.sh${NC}"
+  echo -e "3. If deploying Gemini backend, refer to its deployment steps."
 }
 
 # Run the main function

@@ -22,7 +22,7 @@ section() {
 section "Checking required tools..."
 
 MISSING_TOOLS=0
-for tool in npm node gh-pages; do
+for tool in npm node gh-pages; do # gh-pages is from Frontend/package.json "deploy" script
   if ! command -v $tool &> /dev/null; then
     echo -e "${RED}Error: $tool is not installed or not in PATH${NC}"
     MISSING_TOOLS=1
@@ -32,7 +32,7 @@ for tool in npm node gh-pages; do
 done
 
 if [ $MISSING_TOOLS -eq 1 ]; then
-  echo -e "${RED}Please install the missing tools. For gh-pages, run: npm install -g gh-pages${NC}"
+  echo -e "${RED}Please install the missing tools. For gh-pages, run: npm install -g gh-pages (or check Frontend devDependencies)${NC}"
   exit 1
 fi
 
@@ -53,18 +53,18 @@ deploy_frontend() {
     echo "Creating .env.production file..."
     cat > .env.production << EOL
 # Production environment variables
-# Set to empty to use local processing
-VITE_STOCKFISH_URL=''
-VITE_GEMINI_URL=''
-VITE_AUDIO_URL=''
+VITE_GEMINI_URL='https://your-production-gemini-backend-url.cloudfunctions.net/analyzeChessPosition' # Replace with your actual deployed Gemini function URL
 EOL
+  else
+    echo ".env.production already exists. Please ensure VITE_GEMINI_URL is set for your production Gemini backend, and VITE_STOCKFISH_URL/VITE_AUDIO_URL are empty."
   fi
   
   echo "Building frontend for production..."
-  npm run build
+  # This will use .env.production variables
+  npm run build 
   
   echo "Deploying to GitHub Pages with custom domain..."
-  npm run deploy
+  npm run deploy 
   
   echo -e "${GREEN}✓ Deployment to GitHub Pages with custom domain complete!${NC}"
   
@@ -72,9 +72,10 @@ EOL
 }
 
 main() {
-  echo -e "\n${BLUE}This script will build and deploy the Enpassant Chess App to GitHub Pages with custom domain.${NC}"
+  echo -e "\n${BLUE}This script will build and deploy the Enpassant Chess App Frontend to GitHub Pages with custom domain.${NC}"
   echo -e "Make sure you have configured Git to use your GitHub credentials."
   echo -e "IMPORTANT: Ensure your DNS settings point 'enpassant.wiki' to GitHub Pages."
+  echo -e "Ensure your production VITE_GEMINI_URL is correctly set in Frontend/.env.production"
   
   read -p "Do you want to continue? (y/n): " CONTINUE
   if [[ ! $CONTINUE =~ ^[Yy]$ ]]; then
@@ -82,7 +83,6 @@ main() {
     exit 0
   fi
   
-  # Check if there are uncommitted changes
   cd "$FRONTEND_DIR"
   if [ -n "$(git status --porcelain)" ]; then
     echo -e "${YELLOW}Warning: You have uncommitted changes in your frontend directory.${NC}"
