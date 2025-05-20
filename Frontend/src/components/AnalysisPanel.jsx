@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getStockfishAnalysis, getGeminiExplanation, stopSpeech } from '../services/api';
 import { Chess } from 'chess.js';
+import { devLog, devError } from '../utils/logger';
 import CONFIG from '../config';
 
 const AnalysisPanel = ({ 
@@ -75,7 +76,7 @@ const AnalysisPanel = ({
       }
       
       // Start analysis with the specified depth
-      console.log(`Starting analysis at depth ${analysisDepth}...`);
+      devLog(`Starting analysis at depth ${analysisDepth}...`);
       
       // Set up a progress handler for analysis updates
       const analysisUpdateHandler = (progressResult) => {
@@ -84,7 +85,7 @@ const AnalysisPanel = ({
         const analysisDepth = progressResult.depth || 0;
         const source = progressResult.source || 'local';
         
-        console.log(`Analysis update from ${source}: depth ${analysisDepth}, eval: ${progressResult.evaluation}`);
+        devLog(`Analysis update from ${source}: depth ${analysisDepth}, eval: ${progressResult.evaluation}`);
         
         // Always show results as they come in
         setEvaluation(progressResult.evaluation);
@@ -114,7 +115,7 @@ const AnalysisPanel = ({
         analysisUpdateHandler
       );
     } catch (error) {
-      console.error('Stockfish analysis error:', error);
+      devError('Stockfish analysis error:', error);
       setError('Analysis unavailable. Try again or adjust depth.');
       setIsAnalyzing(false);
     }
@@ -160,7 +161,7 @@ const AnalysisPanel = ({
     setResponseTime(null);
     
     try {
-      console.log(`Requesting explanation with ${useDeepThink ? 'Deep Think' : 'standard'} mode`);
+      devLog(`Requesting explanation with ${useDeepThink ? 'Deep Think' : 'standard'} mode`);
       const clientStartTime = performance.now();
 
       const isGameReport = isCheckmate;
@@ -178,7 +179,7 @@ const AnalysisPanel = ({
       );
       
       const clientResponseTime = ((performance.now() - clientStartTime) / 1000).toFixed(2);
-      console.log(`Response received in ${clientResponseTime}s (client-side measurement)`);
+      devLog(`Response received in ${clientResponseTime}s (client-side measurement)`);
       
       if (result && result.explanation) {
         setExplanation(result.explanation);
@@ -194,12 +195,12 @@ const AnalysisPanel = ({
           });
         }
         
-        console.log(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
+        devLog(`AI generated ${result.explanation.length} characters in ${finalResponseTime}s using ${result.model || 'unknown model'}`);
       } else {
         throw new Error('Empty or invalid response from AI service');
       }
     } catch (error) {
-      console.error('Gemini explanation error:', error);
+      devError('Gemini explanation error:', error);
       
       const errorMessage = error.message.includes('AI analysis service') 
         ? error.message 

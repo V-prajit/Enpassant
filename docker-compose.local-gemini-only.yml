@@ -10,7 +10,7 @@ services:
       - "8081:8081" 
     volumes:
       - ./Backend/gcloud/analyze-position:/app 
-      # Ensure this path is correct for your local machine where you store the key
+      - /app/node_modules
       - ~/.gcp-keys/enpassant-local-dev-key.json:/app/gcp-key.json:ro
     environment:
       - PORT=8081
