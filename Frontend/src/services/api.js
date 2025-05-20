@@ -1,4 +1,5 @@
 // Enpassant/Frontend/src/services/api.js
+import { devLog, devWarn, devError } from '../utils/logger';
 
 let stockfishWorker = null;
 let stockfishReady = false; // True when 'uciok' and 'readyok' have been received and options set
@@ -11,45 +12,44 @@ let currentLocalEvaluation = '0.0';
 let currentLocalMoves = []; // Stores { uci, san, pvString, pvArray, evaluation, depth }
 
 function initLocalStockfish() {
-  // If a worker exists or is already in the process of initializing, don't start over.
   if (stockfishWorker || isInitializing) {
     if (stockfishWorker && !stockfishReady) {
       // If worker exists but not ready, it might be waiting for 'isready' response
-      // console.log('initLocalStockfish: Worker exists but not ready. Will rely on analyzeWithLocalStockfish to poke.');
+      // devLog('initLocalStockfish: Worker exists but not ready. Will rely on analyzeWithLocalStockfish to poke.');
     } else if (isInitializing) {
-      // console.log('initLocalStockfish: Initialization already in progress.');
+      // devLog('initLocalStockfish: Initialization already in progress.');
     }
     return;
   }
 
   isInitializing = true;
-  console.log('[Stockfish Log] initLocalStockfish: Starting initialization...');
+  devLog('[Stockfish Log] initLocalStockfish: Starting initialization...');
 
   try {
     stockfishWorker = new Worker('/stockfish-nnue-16-single.js'); // Ensure this path is correct
 
     stockfishWorker.onmessage = (event) => {
       const message = event.data;
-      // console.log(`[Stockfish Raw Msg]: ${message}`); // Verbose
+      // devLog(`[Stockfish Raw Msg]: ${message}`); // Verbose
 
       if (typeof message === 'string') {
         if (message.includes('uciok')) {
-          console.log('[Stockfish Log] Received uciok. Sending isready.');
+          devLog('[Stockfish Log] Received uciok. Sending isready.');
           stockfishWorker.postMessage('isready');
         } else if (message.includes('readyok')) {
-          console.log('[Stockfish Log] Received readyok.');
+          devLog('[Stockfish Log] Received readyok.');
           if (!stockfishReady) { // Check stockfishReady to avoid redundant setup
-            console.log('[Stockfish Log] Stockfish engine is ready. Setting MultiPV option.');
+            devLog('[Stockfish Log] Stockfish engine is ready. Setting MultiPV option.');
             stockfishWorker.postMessage('setoption name MultiPV value 5');
             // Consider 'readyok' after setoption as the true ready state,
             // but for many engines, they are ready to receive 'go' after options.
             // For simplicity, we'll assume it's ready here.
             stockfishReady = true;
             isInitializing = false; // Initialization complete
-            console.log('[Stockfish Log] stockfishReady is now true.');
+            devLog('[Stockfish Log] stockfishReady is now true.');
             // If an analysis was queued, analyzeWithLocalStockfish's tryAnalysis will pick it up.
           } else {
-            console.log('[Stockfish Log] Received readyok, but stockfishReady was already true.');
+            devLog('[Stockfish Log] Received readyok, but stockfishReady was already true.');
              isInitializing = false; // Ensure this is reset
           }
         } else if (message.startsWith('info')) {
@@ -65,7 +65,7 @@ function initLocalStockfish() {
             });
           }
         } else if (message.startsWith('bestmove')) {
-          console.log('[Stockfish Log] Received bestmove.');
+          devLog('[Stockfish Log] Received bestmove.');
           parseStockfishBestmove(message);
           const finalProcessedMoves = currentLocalMoves.filter(m => m && m.uci).map(m => ({
             uci: m.uci, san: m.san, pv: m.pvString, evaluation: m.evaluation,
@@ -90,7 +90,7 @@ function initLocalStockfish() {
     };
 
     stockfishWorker.onerror = (error) => {
-      console.error('[Stockfish Log] Worker onerror:', error);
+      devError('[Stockfish Log] Worker onerror:', error);
       stockfishReady = false;
       isInitializing = false;
       if (stockfishWorker) {
@@ -104,15 +104,15 @@ function initLocalStockfish() {
     };
 
     stockfishWorker.onmessageerror = (error) => {
-      console.error('[Stockfish Log] Worker onmessageerror:', error);
+      devError('[Stockfish Log] Worker onmessageerror:', error);
       // Similar handling to onerror might be needed if this indicates a critical issue
     };
     
-    console.log('[Stockfish Log] initLocalStockfish: Sending uci.');
+    devLog('[Stockfish Log] initLocalStockfish: Sending uci.');
     stockfishWorker.postMessage('uci');
 
   } catch (error) {
-    console.error('[Stockfish Log] Failed to initialize local Stockfish worker:', error);
+    devError('[Stockfish Log] Failed to initialize local Stockfish worker:', error);
     stockfishReady = false;
     isInitializing = false;
     stockfishWorker = null; // Ensure it's null so it can be retried
@@ -199,14 +199,14 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
   // Chain onto the existing queue
   const analysisPromise = analysisQueue.then(() => {
     return new Promise((resolve, reject) => {
-      console.log(`[Stockfish Log] analyzeWithLocalStockfish: Queued for FEN: ${fen}, Depth: ${depth}`);
+      devLog(`[Stockfish Log] analyzeWithLocalStockfish: Queued for FEN: ${fen}, Depth: ${depth}`);
       
       if (!stockfishWorker && !isInitializing) {
-        console.log("[Stockfish Log] analyzeWithLocalStockfish: Worker is null and not initializing. Calling initLocalStockfish.");
+        devLog("[Stockfish Log] analyzeWithLocalStockfish: Worker is null and not initializing. Calling initLocalStockfish.");
         initLocalStockfish(); // Attempt to initialize if not already
       } else if (stockfishWorker && !stockfishReady && !isInitializing) {
         // If worker exists but isn't ready (and not currently trying to init), poke it.
-        console.log("[Stockfish Log] analyzeWithLocalStockfish: Worker exists but not ready. Sending 'isready'.");
+        devLog("[Stockfish Log] analyzeWithLocalStockfish: Worker exists but not ready. Sending 'isready'.");
         stockfishWorker.postMessage('isready');
       }
 
@@ -216,7 +216,7 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
       
       const tryAnalysis = () => {
         if (stockfishReady) {
-          console.log(`[Stockfish Log] analyzeWithLocalStockfish: Stockfish is ready. Starting analysis for FEN: ${fen}`);
+          devLog(`[Stockfish Log] analyzeWithLocalStockfish: Stockfish is ready. Starting analysis for FEN: ${fen}`);
           currentOnUpdate = onUpdate;
           currentAnalysisResolver = { resolve, reject };
           currentLocalDepth = 0;
@@ -231,14 +231,15 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
         } else {
           attempts++;
           if (attempts > maxAttempts) {
-            console.warn(`[Stockfish Log] analyzeWithLocalStockfish: Stockfish not ready after ${maxAttempts} attempts for FEN: ${fen}. Rejecting.`);
+            // Use devWarn for warnings related to operational issues in development
+            devWarn(`[Stockfish Log] analyzeWithLocalStockfish: Stockfish not ready after ${maxAttempts} attempts for FEN: ${fen}. Rejecting.`);
             reject(new Error(`Stockfish engine timed out. isInitializing: ${isInitializing}, stockfishReady: ${stockfishReady}`));
           } else {
             if (attempts % 20 === 0) { // Log progress periodically
-                 console.log(`[Stockfish Log] analyzeWithLocalStockfish: Waiting for stockfishReady... (Attempt ${attempts}/${maxAttempts}) isInitializing: ${isInitializing}`);
+                 devLog(`[Stockfish Log] analyzeWithLocalStockfish: Waiting for stockfishReady... (Attempt ${attempts}/${maxAttempts}) isInitializing: ${isInitializing}`);
             }
             if (!stockfishWorker && !isInitializing) { // If worker died and we are not trying to re-init
-                console.log("[Stockfish Log] analyzeWithLocalStockfish: Worker became null while waiting. Re-initializing.");
+                devLog("[Stockfish Log] analyzeWithLocalStockfish: Worker became null while waiting. Re-initializing.");
                 initLocalStockfish();
             } else if (stockfishWorker && !isInitializing && !stockfishReady) {
                 // Periodically send 'isready' if stuck and not initializing
@@ -257,22 +258,27 @@ function analyzeWithLocalStockfish(fen, depth = 18, onUpdate = null) {
 }
 
 export const getStockfishAnalysis = async (fen, depth = 18, onUpdate = null) => {
-  console.log(`[Stockfish API] getStockfishAnalysis called for FEN: ${fen}, Depth: ${depth}`);
+  devLog(`[Stockfish API] getStockfishAnalysis called for FEN: ${fen}, Depth: ${depth}`);
   // Ensure worker is initialized once globally if not already.
   // Subsequent calls will use the existing worker via analyzeWithLocalStockfish.
   if (!stockfishWorker && !isInitializing) {
     initLocalStockfish();
   }
-  
+
   try {
     const result = await analyzeWithLocalStockfish(fen, depth, onUpdate);
-    console.log(`[Stockfish API] Analysis completed. Depth: ${result.depth}, Eval: ${result.evaluation}, Top PV: ${result.bestMoves[0]?.pv}`);
+    devLog(`[Stockfish API] Analysis completed. Depth: ${result.depth}, Eval: ${result.evaluation}, Top PV: ${result.bestMoves[0]?.pv}`);
     return result;
   } catch (error) {
-    console.error('[Stockfish API] Error in getStockfishAnalysis:', error);
+    devError('[Stockfish API] Error in getStockfishAnalysis:', error);
+    // Return a structure consistent with successful analysis but indicating an error
     return {
-      evaluation: 'Error', bestMoves: [], depth: 0,
-      source: 'local', completed: true, error: error.message
+      evaluation: 'Error', 
+      bestMoves: [], 
+      depth: 0,
+      source: 'local', 
+      completed: true, 
+      error: error.message 
     };
   }
 };
@@ -327,7 +333,7 @@ export const speakText = (text, options = {}) => {
     }
 
     if (synth.speaking) {
-      console.log("[Speech Log] Cancelling ongoing speech for new request...");
+      devLog("[Speech Log] Cancelling ongoing speech for new request...");
       synth.cancel();
       // Add a slight delay to ensure cancel completes before new speech starts
       // This can sometimes help with abrupt cutoffs or issues on some browsers
@@ -361,18 +367,18 @@ function startSpeech(text, options, resolve, reject) {
     }
 
     utterance.onstart = () => {
-      console.log("[Speech Log] Speech started for text:", text.substring(0, 50) + "...");
+      devLog("[Speech Log] Speech started for text:", text.substring(0, 50) + "...");
       if (options.onStart) options.onStart();
     };
 
     utterance.onend = () => {
-      console.log("[Speech Log] Speech ended.");
+      devLog("[Speech Log] Speech ended.");
       if (options.onEnd) options.onEnd();
       resolve();
     };
 
     utterance.onerror = (event) => {
-      console.error("[Speech Log] Speech synthesis error:", event.error);
+      devError("[Speech Log] Speech synthesis error:", event.error);
       if (options.onError) options.onError(event);
       reject(event);
     };
@@ -380,7 +386,7 @@ function startSpeech(text, options, resolve, reject) {
     try {
         synth.speak(utterance);
     } catch (e) {
-        console.error("[Speech Log] Error calling synth.speak:", e);
+        devError("[Speech Log] Error calling synth.speak:", e);
         reject(e);
     }
 }
@@ -388,7 +394,7 @@ function startSpeech(text, options, resolve, reject) {
 
 export const stopSpeech = () => {
   if (synth && synth.speaking) {
-    console.log("[Speech Log] stopSpeech called, cancelling active speech.");
+    devLog("[Speech Log] stopSpeech called, cancelling active speech.");
     synth.cancel();
   }
 };
@@ -407,7 +413,8 @@ export const getGeminiExplanation = async (
   const geminiApiUrl = import.meta.env.VITE_GEMINI_URL;
 
   if (!geminiApiUrl) {
-    console.warn('[Gemini API] VITE_GEMINI_URL is not set. Using mock Gemini response.');
+    // Use devWarn for development-specific warnings
+    devWarn('[Gemini API] VITE_GEMINI_URL is not set. Using mock Gemini response.');
     return {
       explanation: `Mock explanation for FEN: ${fen}. Player level: ${playerLevel}. Deep Think: ${useDeepThink}. Question: ${userQuestion || 'N/A'}. Evaluation: ${evaluation}. Best Moves: ${JSON.stringify(bestMoves)}`,
       responseTime: 0.1,
@@ -418,7 +425,7 @@ export const getGeminiExplanation = async (
   }
 
   try {
-    console.log(`[Gemini API] Requesting Gemini explanation from: ${geminiApiUrl}`);
+    devLog(`[Gemini API] Requesting Gemini explanation from: ${geminiApiUrl}`);
     const response = await fetch(geminiApiUrl, {
       method: 'POST',
       headers: {
@@ -445,16 +452,16 @@ export const getGeminiExplanation = async (
       } catch(e) {
         errorData = { error: errorText };
       }
-      console.error('[Gemini API] Error from Gemini explanation service:', errorData);
+      devError('[Gemini API] Error from Gemini explanation service:', errorData);
       throw new Error(errorData.error || `Failed to get explanation. Status: ${response.status}`);
     }
 
     const result = await response.json();
-    console.log('[Gemini API] Gemini explanation received successfully.');
+    devLog('[Gemini API] Gemini explanation received successfully.');
     return result;
 
   } catch (error) {
-    console.error('[Gemini API] Error calling Gemini explanation API:', error);
+    devError('[Gemini API] Error calling Gemini explanation API:', error);
     return {
       explanation: `Error fetching explanation: ${error.message}. Please check the console for details.`,
       responseTime: 0,
