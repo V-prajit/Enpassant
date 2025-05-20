@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Chess } from 'chess.js';
+import { devLog, devError } from '../utils/logger';
 
 const useChessGame = (initialFen = 'start') => {
     const [chess, setChess] = useState(new Chess());
@@ -17,7 +18,7 @@ const useChessGame = (initialFen = 'start') => {
 
     const makeMove = useCallback((from, to, promotion) => {
         try {
-            console.log("Making move in chess.js:", { from, to, promotion });
+            devLog("Making move in chess.js:", { from, to, promotion });
             
             // Prepare move object
             const moveObj = { from, to };
@@ -27,23 +28,23 @@ const useChessGame = (initialFen = 'start') => {
                 moveObj.promotion = promotion.toLowerCase();
             }
             
-            console.log("Chess move object:", moveObj);
+            devLog("Chess move object:", moveObj);
             
             // Make the move
             const move = chess.move(moveObj);
             
             if (move) {
-                console.log("Move successful:", move);
+                devLog("Move successful:", move);
                 setFen(chess.fen());
                 setHistory(chess.history({ verbose: true }));
                 setLastMove([from, to]);
                 return true;
             }
             
-            console.log("Move rejected by chess.js");
+            devLog("Move rejected by chess.js");
             return false;
         } catch (error) {
-            console.error("Invalid move:", error);
+            devError("Invalid move:", error);
             return false;
         }
     }, [chess]);
@@ -60,7 +61,7 @@ const useChessGame = (initialFen = 'start') => {
             }
             return false;
         } catch (error) {
-            console.error("Invalid SAN move:", error);
+            devError("Invalid SAN move:", error);
             return false;
         }
     }, [chess]);

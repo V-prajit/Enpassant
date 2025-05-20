@@ -11,8 +11,8 @@ const {
   createGenericPrompt,
 } = require('./player-levels');
 
-const MODEL_ID             = 'gemini-2.5-flash-preview-04-17'; // Taken from the version with debugging
-const DEFAULT_DEEP_BUDGET  = 1024; // Taken from the version with debugging
+const MODEL_ID             = 'gemini-2.5-flash-preview-04-17';
+const DEFAULT_DEEP_BUDGET  = 1024;
 
 function makeThinkingConfig(enabled, budgetFromClient) {
   return { thinkingBudget: enabled ? (Number(budgetFromClient) || DEFAULT_DEEP_BUDGET) : 0 };
