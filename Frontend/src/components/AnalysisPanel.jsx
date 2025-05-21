@@ -23,8 +23,7 @@ const AnalysisPanel = ({
   const [autoAnalyze, setAutoAnalyze] = useState(true);
 
   const [depth, setDepth] = useState(CONFIG.ANALYSIS.defaultDepth);
-  const [threads, setThreads] = useState(1);
-  const [hashSize, setHashSize] = useState(16);
+  const [hashSize, setHashSize] = useState(16); // Default hash size
   const [useInfiniteDepth, setUseInfiniteDepth] = useState(false);
 
   const [modelInfo, setModelInfo] = useState(null);
@@ -37,8 +36,7 @@ const AnalysisPanel = ({
   const prevAutoAnalyzeRef = useRef(autoAnalyze);
   const prevDepthRef = useRef(depth);
   const prevUseInfiniteRef = useRef(useInfiniteDepth);
-  const prevThreadsRef = useRef(threads);
-  const prevHashSizeRef = useRef(hashSize);
+  const prevHashSizeRef = useRef(hashSize); // Added for hash size
   const activeAnalysisParamsRef = useRef(null);
 
   // Effect to pass internal bestMoves state to parent (Layout)
@@ -147,7 +145,7 @@ const AnalysisPanel = ({
       await getStockfishAnalysis(
         currentFen,
         analysisParams.useInfinite ? "infinite" : analysisParams.depth,
-        { threads: analysisParams.threads, hash: analysisParams.hashSize },
+        { hash: analysisParams.hashSize }, // Threads removed
         analysisUpdateHandler
       );
 
@@ -170,15 +168,14 @@ const AnalysisPanel = ({
   }, [uciToSanLight, onEvaluationChange]);
 
   useEffect(() => {
-    const currentSettings = { depth, useInfinite: useInfiniteDepth, threads, hashSize };
+    const currentSettings = { depth, useInfinite: useInfiniteDepth, hashSize }; // Threads removed
 
     const fenActuallyChanged = fen !== prevFenRef.current;
     const autoAnalyzeToggledOn = autoAnalyze && !prevAutoAnalyzeRef.current;
     const autoAnalyzeToggledOff = !autoAnalyze && prevAutoAnalyzeRef.current;
     const settingsActuallyChanged = depth !== prevDepthRef.current ||
                                  useInfiniteDepth !== prevUseInfiniteRef.current ||
-                                 threads !== prevThreadsRef.current ||
-                                 hashSize !== prevHashSizeRef.current;
+                                 hashSize !== prevHashSizeRef.current; // Threads removed
     
     if (analysisTimeoutRef.current) {
       clearTimeout(analysisTimeoutRef.current);
@@ -205,8 +202,9 @@ const AnalysisPanel = ({
                 activeAnalysisParamsRef.current.fen !== fen ||
                 activeAnalysisParamsRef.current.depth !== currentSettings.depth ||
                 activeAnalysisParamsRef.current.useInfinite !== currentSettings.useInfinite ||
-                activeAnalysisParamsRef.current.threads !== currentSettings.threads ||
-                activeAnalysisParamsRef.current.hashSize !== currentSettings.hashSize) {
+                activeAnalysisParamsRef.current.hashSize !== currentSettings.hashSize || // Threads removed
+                !isStockfishAnalyzing // Or analysis was stopped for some reason
+            ) {
                 shouldStop = true; // Stop any different analysis
                 shouldStart = true;
             }
@@ -236,8 +234,7 @@ const AnalysisPanel = ({
              activeAnalysisParamsRef.current.fen !== fen || // Or FEN changed
              activeAnalysisParamsRef.current.depth !== currentSettings.depth ||
              activeAnalysisParamsRef.current.useInfinite !== currentSettings.useInfinite ||
-             activeAnalysisParamsRef.current.threads !== currentSettings.threads ||
-             activeAnalysisParamsRef.current.hashSize !== currentSettings.hashSize ||
+             activeAnalysisParamsRef.current.hashSize !== currentSettings.hashSize || // Threads removed
              !isStockfishAnalyzing // Or analysis was stopped for some reason
             )
         ) {
@@ -253,13 +250,12 @@ const AnalysisPanel = ({
     prevAutoAnalyzeRef.current = autoAnalyze;
     prevDepthRef.current = depth;
     prevUseInfiniteRef.current = useInfiniteDepth;
-    prevThreadsRef.current = threads;
-    prevHashSizeRef.current = hashSize;
+    prevHashSizeRef.current = hashSize; // Threads removed
 
     return () => {
       if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
     };
-  }, [fen, autoAnalyze, depth, useInfiniteDepth, threads, hashSize, handleAnalyze]); // handleAnalyze added back. Its definition is memoized.
+  }, [fen, autoAnalyze, depth, useInfiniteDepth, hashSize, handleAnalyze]); // Threads removed
 
   const handleGetExplanation = async (useGeminiDeepThink = false) => {
     if (!fen || isGeminiLoading) return;
@@ -330,11 +326,10 @@ const AnalysisPanel = ({
     } else {
         devLog("[AnalysisPanel] Manual Start Analysis Clicked.");
         if (autoAnalyze) setAutoAnalyze(false); 
-        handleAnalyze(fen, { depth, useInfinite: useInfiniteDepth, threads, hashSize });
+        handleAnalyze(fen, { depth, useInfinite: useInfiniteDepth, hashSize }); // Threads removed
     }
   };
 
-  // JSX remains the same as the previous version
   return (
     <div className="bg-white rounded-xl shadow-md ring-1 ring-gray-200/50 p-4 md:p-6 transition-all duration-300 hover:shadow-lg">
       <h3 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 flex items-center"><Bot size={24} className="mr-2 text-blue-600"/>Position Analysis</h3>
@@ -360,15 +355,6 @@ const AnalysisPanel = ({
           </div>
 
           <div>
-            <label htmlFor="threads" className="block text-sm font-medium text-gray-700 mb-1">Threads</label>
-            <input
-              type="number" id="threads" min="1" max="16" value={threads}
-              onChange={(e) => setThreads(Number(e.target.value))}
-              className="w-full py-1 px-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          <div>
             <label htmlFor="hashSize" className="block text-sm font-medium text-gray-700 mb-1">Hash (MB)</label>
             <input
               type="number" id="hashSize" min="16" max="1024" step="16" value={hashSize}
@@ -377,7 +363,7 @@ const AnalysisPanel = ({
             />
           </div>
           
-          <div className="flex items-center justify-between md:col-span-1">
+          <div className="flex items-center justify-between md:col-span-2"> {/* Changed to md:col-span-2 to take full width on medium screens */}
              <div className="flex items-center">
                 <input
                 type="checkbox" id="autoAnalyze" checked={autoAnalyze}

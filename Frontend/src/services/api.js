@@ -51,9 +51,7 @@ function initLocalStockfish(initialOptions = {}) {
           devLog('[Stockfish Log] Received uciok. Setting initial options and sending isready.');
           // Set initial options like MultiPV before confirming ready
           stockfishWorker.postMessage('setoption name MultiPV value 5'); // Default MultiPV
-          if (initialOptions.threads) {
-            stockfishWorker.postMessage(`setoption name Threads value ${initialOptions.threads}`);
-          }
+          // Threads option removed
           if (initialOptions.hash) {
             stockfishWorker.postMessage(`setoption name Hash value ${initialOptions.hash}`);
           }
@@ -270,7 +268,7 @@ function analyzeWithLocalStockfish(fen, depth = 18, options = {}, onUpdate = nul
           currentLocalMoves = [];
 
           // Apply options before starting analysis for this specific run
-          if (options.threads) await setStockfishOption('Threads', options.threads);
+          // Threads option removed
           if (options.hash) await setStockfishOption('Hash', options.hash);
           // MultiPV is typically set once at init or can be changed here too
           // await setStockfishOption('MultiPV', options.multiPV || 5);
@@ -321,7 +319,7 @@ export const getStockfishAnalysis = async (fen, depth = 18, options = {}, onUpda
   }
 
   try {
-    const result = await analyzeWithLocalStockfish(fen, depth, options, onUpdate);
+    const result = await analyzeWithLocalStockfish(fen, depth, options, onUpdate); // Threads removed from options here
     devLog(`[Stockfish API] Analysis completed. Depth: ${result.depth}, Eval: ${result.evaluation}, Top PV: ${result.bestMoves[0]?.pv}`);
     return result;
   } catch (error) {
