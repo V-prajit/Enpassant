@@ -12,7 +12,7 @@ const CONFIG = {
       preferLocalEngine: true,
       defaultDepth: 18,
       deepAnalysisDepth: 22,
-      analysisDelay: 100,
+      analysisDelay: 0,
     },
     
     SPEECH: {
